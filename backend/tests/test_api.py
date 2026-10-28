@@ -36,6 +36,20 @@ async def test_list_filters(client):
     assert any(c["be"] == "вада" for c in found)
 
 
+async def test_me_reports_streak_and_explain_lang(client):
+    me = (await client.get("/api/me", headers=H)).json()
+    assert me["streak"] == 1 and me["explain_lang"] == "ru"
+
+    r = await client.put("/api/me/settings", json={"explain_lang": "be"}, headers=H)
+    assert r.json()["explain_lang"] == "be"
+    assert (await client.put("/api/me/settings", json={"explain_lang": "en"}, headers=H)).status_code == 422
+
+
+async def test_card_contains_belarusian_explanation(client):
+    card = (await client.get("/api/cards?kind=holiday", headers=H)).json()[0]
+    assert card["summary_be"] and card["body_be"]
+
+
 async def test_settings_validation(client):
     ok = await client.put("/api/me/settings", json={"send_time": "08:30", "tz": "Europe/Warsaw"}, headers=H)
     assert ok.json()["send_time"] == "08:30" and ok.json()["tz_set"] is True

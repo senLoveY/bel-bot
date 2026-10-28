@@ -58,11 +58,17 @@ def local_now(user: User, now_utc: datetime) -> datetime:
     return now_utc.replace(tzinfo=timezone.utc).astimezone(tz)
 
 
+def jitter_minutes(user_id: int) -> int:
+    """Стабильный сдвиг в пределах ±send_jitter_min минут: у каждого пользователя свой, но неизменный."""
+    span = 2 * settings.send_jitter_min + 1
+    return (user_id * 2654435761) % span - settings.send_jitter_min
+
+
 def is_due(user: User, now_utc: datetime) -> Optional[date]:
     """Возвращает локальную дату, если у пользователя сейчас окно отправки, иначе None."""
     local = local_now(user, now_utc)
     hh, mm = (int(x) for x in user.send_time.split(":"))
-    target = local.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    target = local.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(minutes=jitter_minutes(user.id))
     if target <= local < target + timedelta(hours=settings.catchup_hours):
         return local.date()
     return None
@@ -124,7 +130,7 @@ async def send_one(bot: Bot, delivery_id: int, limiter: RateLimiter) -> None:
         try:
             await bot.send_message(
                 user.id,
-                format_card_message(card),
+                format_card_message(card, user.explain_lang or "ru"),
                 reply_markup=card_keyboard(card.id),
                 parse_mode="HTML",
             )

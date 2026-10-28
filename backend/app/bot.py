@@ -34,7 +34,7 @@ async def send_today_card(message: Message, session, user: User) -> None:
     if card is None:
         await message.answer("Пакуль няма карткаў.")
         return
-    await message.answer(format_card_message(card), reply_markup=card_keyboard(card.id), parse_mode="HTML")
+    await message.answer(format_card_message(card, user.explain_lang or "ru"), reply_markup=card_keyboard(card.id), parse_mode="HTML")
     # помечаем сегодняшнюю рассылку выполненной, чтобы не прислать то же самое второй раз
     session.add(Delivery(user_id=user.id, card_id=card.id, local_date=day.isoformat(), status="sent", sent_at=utcnow()))
     try:
@@ -68,7 +68,7 @@ async def cmd_word(message: Message) -> None:
         if card is None:
             await message.answer("Пакуль няма карткаў.")
             return
-        await message.answer(format_card_message(card), reply_markup=card_keyboard(card.id), parse_mode="HTML")
+        await message.answer(format_card_message(card, user.explain_lang or "ru"), reply_markup=card_keyboard(card.id), parse_mode="HTML")
 
 
 @router.message(Command("settings"))

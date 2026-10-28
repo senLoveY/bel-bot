@@ -58,10 +58,12 @@ def card_to_dict(card: Card, saved_status: Optional[str] = None) -> dict:
         "be": card.be,
         "accent": card.accent,
         "ru": card.ru,
+        "summary_be": card.summary_be,
         "pos": card.pos,
         "example_be": card.example_be,
         "example_ru": card.example_ru,
         "body": card.body,
+        "body_be": card.body_be,
         "month_day": card.month_day,
         "level": card.level,
         "topic": card.topic,
@@ -69,17 +71,24 @@ def card_to_dict(card: Card, saved_status: Optional[str] = None) -> dict:
     }
 
 
-def format_card_message(card: Card) -> str:
+def explanation(card: Card, lang: str = "ru") -> str:
+    """Краткое пояснение на выбранном языке; если белорусского нет, показываем русское."""
+    if lang == "be" and card.summary_be:
+        return card.summary_be
+    return card.ru
+
+
+def format_card_message(card: Card, lang: str = "ru") -> str:
     """Текст карточки для сообщения бота (HTML parse mode)."""
     e = html.escape
     lines = [f"{KIND_ICONS.get(card.kind, '')} <b>{KIND_TITLES.get(card.kind, '')}</b>", ""]
     if card.kind == "word":
-        lines.append(f"<b>{e(card.accent or card.be)}</b> — {e(card.ru)}")
+        lines.append(f"<b>{e(card.accent or card.be)}</b> — {e(explanation(card, lang))}")
         if card.pos:
             lines.append(f"<i>{e(card.pos)}</i>")
         if card.example_be:
             lines += ["", f"«{e(card.example_be)}»", f"<i>{e(card.example_ru or '')}</i>"]
     else:
         lines.append(f"<b>{e(card.be)}</b>")
-        lines.append(e(card.ru))
+        lines.append(e(explanation(card, lang)))
     return "\n".join(lines)

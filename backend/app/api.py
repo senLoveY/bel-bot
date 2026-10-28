@@ -17,6 +17,7 @@ from .auth import current_user
 from .cards import card_for_date, card_to_dict, seed_cards
 from .db import SessionLocal, get_session, init_db
 from .models import Card, SavedCard, User
+from .streak import current_streak, touch_streak
 
 router = APIRouter(prefix="/api")
 
@@ -40,6 +41,7 @@ class SettingsIn(BaseModel):
     send_time: Optional[str] = None
     tz: Optional[str] = None
     is_active: Optional[bool] = None
+    explain_lang: Optional[str] = None  # ru | be
 
 
 class SaveIn(BaseModel):
@@ -54,11 +56,18 @@ def user_to_dict(user: User) -> dict:
         "tz_set": user.tz_set,
         "send_time": user.send_time,
         "is_active": user.is_active,
+        "explain_lang": user.explain_lang or "ru",
+        "streak": current_streak(user, user_today(user)),
+        "longest_streak": user.longest_streak or 0,
     }
 
 
 @router.get("/me")
-async def me(user: User = Depends(current_user)):
+async def me(user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    # открытие приложения — это визит за сегодня, он двигает серию
+    touch_streak(user, user_today(user))
+    session.add(user)
+    await session.commit()
     return user_to_dict(user)
 
 
@@ -77,6 +86,10 @@ async def update_settings(body: SettingsIn, user: User = Depends(current_user), 
         user.tz_set = True
     if body.is_active is not None:
         user.is_active = body.is_active
+    if body.explain_lang is not None:
+        if body.explain_lang not in ("ru", "be"):
+            raise HTTPException(422, "explain_lang must be ru or be")
+        user.explain_lang = body.explain_lang
     session.add(user)
     await session.commit()
     return user_to_dict(user)

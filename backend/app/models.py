@@ -20,6 +20,10 @@ class User(Base):
     tz_set: Mapped[bool] = mapped_column(Boolean, default=False)  # выбрана ли зона пользователем/приложением
     send_time: Mapped[str] = mapped_column(String(5), default=settings.default_send_time)  # "HH:MM" по tz
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)  # False — пауза или бот заблокирован
+    explain_lang: Mapped[str] = mapped_column(String(2), default="ru")  # язык пояснений: ru | be
+    streak: Mapped[int] = mapped_column(Integer, default=0)  # дней подряд, когда открывали приложение
+    longest_streak: Mapped[int] = mapped_column(Integer, default=0)
+    last_seen_day: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD, локальная дата
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -35,7 +39,9 @@ class Card(Base):
     pos: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     example_be: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     example_ru: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    body: Mapped[str] = mapped_column(Text, default="")  # развёрнутый текст для Mini App
+    summary_be: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)  # краткое пояснение по-белорусски
+    body: Mapped[str] = mapped_column(Text, default="")  # развёрнутый текст для Mini App (русский)
+    body_be: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # то же по-белорусски
     month_day: Mapped[Optional[str]] = mapped_column(String(5), nullable=True, index=True)  # "07-07"
     level: Mapped[str] = mapped_column(String(4), default="A1")
     topic: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)

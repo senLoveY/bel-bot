@@ -21,6 +21,10 @@ const TIMEZONES = [
   "America/New_York",
 ];
 
+// пояснения на выбранном языке; если белорусского текста нет, показываем русский
+const pick = (card, lang) => (lang === "be" && card.summary_be ? card.summary_be : card.ru);
+const pickBody = (card, lang) => (lang === "be" && card.body_be ? card.body_be : card.body);
+
 function Motif({ name, size = 40 }) {
   return <span className="motif" style={{ width: size, height: size, ...maskStyle(name) }} aria-hidden="true" />;
 }
@@ -29,7 +33,7 @@ function Band({ kind = "band" }) {
   return <div className={kind} style={maskStyle(kind)} aria-hidden="true" />;
 }
 
-function Card({ card, onOpen, onToggleSave }) {
+function Card({ card, lang, onOpen, onToggleSave }) {
   return (
     <div className="card" onClick={() => onOpen?.(card)}>
       <Band kind="trim" />
@@ -41,7 +45,7 @@ function Card({ card, onOpen, onToggleSave }) {
             <span className="level">{card.level}</span>
           </div>
           <div className="card-title">{card.kind === "word" ? card.accent || card.be : card.be}</div>
-          <div className="card-sub">{card.ru}</div>
+          <div className="card-sub">{pick(card, lang)}</div>
         </div>
       </div>
       {onToggleSave && (
@@ -60,7 +64,7 @@ function Card({ card, onOpen, onToggleSave }) {
   );
 }
 
-function Detail({ card, onClose, onChange }) {
+function Detail({ card, lang, onClose, onChange }) {
   const set = async (status) => {
     if (status) await api.save(card.id, status);
     else await api.unsave(card.id);
@@ -86,7 +90,7 @@ function Detail({ card, onClose, onChange }) {
       </div>
       <h1>{card.kind === "word" ? card.accent || card.be : card.be}</h1>
       <p className="lead" style={{ textAlign: "center" }}>
-        {card.ru}
+        {pick(card, lang)}
       </p>
       {card.pos && (
         <p className="muted" style={{ textAlign: "center" }}>
@@ -98,7 +102,7 @@ function Detail({ card, onClose, onChange }) {
           «{card.example_be}»<small>{card.example_ru}</small>
         </blockquote>
       )}
-      <p>{card.body}</p>
+      <p>{pickBody(card, lang)}</p>
       <div className="row">
         <button className="btn" onClick={() => set(card.saved === "saved" ? null : "saved")}>
           {card.saved === "saved" ? "★ У захаваных" : "☆ Захаваць"}
@@ -112,7 +116,7 @@ function Detail({ card, onClose, onChange }) {
   );
 }
 
-function Today({ onOpen }) {
+function Today({ onOpen, lang }) {
   const [card, setCard] = useState(null);
   useEffect(() => {
     api.today().then(setCard).catch(() => setCard(false));
@@ -122,13 +126,13 @@ function Today({ onOpen }) {
   return (
     <>
       <h2>Картка дня</h2>
-      <Card card={card} onOpen={onOpen} />
+      <Card card={card} lang={lang} onOpen={onOpen} />
       <p className="muted center">Націсніце на картку, каб даведацца больш</p>
     </>
   );
 }
 
-function Cards({ onOpen, refreshKey }) {
+function Cards({ onOpen, refreshKey, lang }) {
   const [kind, setKind] = useState("");
   const [q, setQ] = useState("");
   const [cards, setCards] = useState([]);
@@ -159,14 +163,14 @@ function Cards({ onOpen, refreshKey }) {
         ))}
       </div>
       {cards.map((c) => (
-        <Card key={c.id} card={c} onOpen={onOpen} onToggleSave={toggle} />
+        <Card key={c.id} card={c} lang={lang} onOpen={onOpen} onToggleSave={toggle} />
       ))}
       {!cards.length && <p className="muted center">Нічога не знойдзена</p>}
     </>
   );
 }
 
-function Saved({ onOpen, refreshKey }) {
+function Saved({ onOpen, refreshKey, me, lang }) {
   const [cards, setCards] = useState(null);
   useEffect(() => {
     api.saved().then(setCards).catch(() => setCards([]));
@@ -179,8 +183,11 @@ function Saved({ onOpen, refreshKey }) {
       <p className="muted">
         Захавана: {cards.length} · вывучана: {learned}
       </p>
+      <p className="muted">
+        Серыя: {me.streak} дн. · найдаўжэйшая: {me.longest_streak} дн.
+      </p>
       {cards.map((c) => (
-        <Card key={c.id} card={c} onOpen={onOpen} />
+        <Card key={c.id} card={c} lang={lang} onOpen={onOpen} />
       ))}
       {!cards.length && <p className="muted center">Пакуль пуста. Захоўвайце карткі зорачкай ☆</p>}
     </>
@@ -205,6 +212,13 @@ function Settings({ me, setMe }) {
       <label className="field">
         Час штодзённай карткі
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} onBlur={() => time !== me.send_time && update({ send_time: time })} />
+      </label>
+      <label className="field">
+        Мова пояснянняў
+        <select value={me.explain_lang} onChange={(e) => update({ explain_lang: e.target.value })}>
+          <option value="ru">Руская</option>
+          <option value="be">Беларуская</option>
+        </select>
       </label>
       <label className="field">
         Часавы пояс
@@ -261,17 +275,19 @@ export default function App() {
     <div className="app">
       <header className="header">
         <div className="brand">Зярнятка</div>
-        <p className="brand-sub">слова, святы і факты</p>
+        <p className="brand-sub">
+          {me.streak > 0 && <>Серыя: {me.streak} дн. · </>}слова, святы і факты
+        </p>
         <Band />
       </header>
       <main className="pad">
         {open ? (
-          <Detail card={open} onClose={close} onChange={setOpen} />
+          <Detail card={open} lang={me.explain_lang} onClose={close} onChange={setOpen} />
         ) : (
           <>
-            {tab === "today" && <Today onOpen={setOpen} />}
-            {tab === "cards" && <Cards onOpen={setOpen} refreshKey={refreshKey} />}
-            {tab === "saved" && <Saved onOpen={setOpen} refreshKey={refreshKey} />}
+            {tab === "today" && <Today onOpen={setOpen} lang={me.explain_lang} />}
+            {tab === "cards" && <Cards onOpen={setOpen} refreshKey={refreshKey} lang={me.explain_lang} />}
+            {tab === "saved" && <Saved onOpen={setOpen} refreshKey={refreshKey} me={me} lang={me.explain_lang} />}
             {tab === "settings" && <Settings me={me} setMe={setMe} />}
           </>
         )}

@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     send_concurrency: int = 10
     scheduler_tick_sec: int = 30
     catchup_hours: int = 6  # после простоя не шлём карточку позднее, чем через N часов
+    send_jitter_min: int = 10  # каждому пользователю сдвигаем время на ±N минут, чтобы не слать всем в одну секунду
     max_attempts: int = 5
 
 

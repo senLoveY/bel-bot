@@ -1,11 +1,11 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
 
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from sqlalchemy import select
 
 from app.db import SessionLocal
-from app.delivery import RateLimiter, enqueue_due, is_due, process_pending
+from app.delivery import RateLimiter, enqueue_due, is_due, jitter_minutes, process_pending
 from app.models import Delivery, User
 
 
@@ -15,18 +15,32 @@ def make_user(**kw):
     return User(**defaults)
 
 
-def test_is_due_respects_timezone_and_window():
-    u = make_user()  # Минск = UTC+3
-    assert is_due(u, datetime(2026, 3, 10, 6, 0)) is not None  # 09:00 локально
-    assert is_due(u, datetime(2026, 3, 10, 5, 59)) is None  # ещё рано
-    assert is_due(u, datetime(2026, 3, 10, 13, 0)) is None  # окно догонки (6 ч) закрыто
+def utc_at_minsk(minutes_from_midnight: int) -> datetime:
+    """Минск = UTC+3 без перехода на летнее время, поэтому UTC выводится простым сдвигом."""
+    return datetime(2026, 3, 10) + timedelta(minutes=minutes_from_midnight) - timedelta(hours=3)
+
+
+def test_jitter_is_stable_and_bounded():
+    for uid in range(1, 500):
+        j = jitter_minutes(uid)
+        assert -10 <= j <= 10
+        assert j == jitter_minutes(uid)
+    assert len({jitter_minutes(uid) for uid in range(1, 500)}) > 5  # не все сдвинуты одинаково
+
+
+def test_is_due_respects_timezone_jitter_and_window():
+    u = make_user()  # id=1, Минск
+    target = 9 * 60 + jitter_minutes(u.id)  # 09:00 плюс личный сдвиг
+    assert is_due(u, utc_at_minsk(target)) is not None
+    assert is_due(u, utc_at_minsk(target - 1)) is None  # ещё рано
+    assert is_due(u, utc_at_minsk(target + 6 * 60)) is None  # окно догонки (6 ч) закрыто
 
 
 async def test_enqueue_is_idempotent():
     async with SessionLocal() as s:
         s.add(make_user())
         await s.commit()
-    now = datetime(2026, 3, 10, 6, 5)
+    now = utc_at_minsk(9 * 60 + jitter_minutes(1))
     assert await enqueue_due(now) == 1
     assert await enqueue_due(now) == 0
 
@@ -35,7 +49,7 @@ async def test_inactive_users_skipped():
     async with SessionLocal() as s:
         s.add(make_user(is_active=False))
         await s.commit()
-    assert await enqueue_due(datetime(2026, 3, 10, 6, 5)) == 0
+    assert await enqueue_due(utc_at_minsk(9 * 60 + jitter_minutes(1))) == 0
 
 
 def fake_bot(exc=None):
@@ -48,7 +62,7 @@ async def run_once(bot):
     async with SessionLocal() as s:
         s.add(make_user())
         await s.commit()
-    await enqueue_due(datetime(2026, 3, 10, 6, 5))
+    await enqueue_due(utc_at_minsk(9 * 60 + jitter_minutes(1)))
     await process_pending(bot, RateLimiter(1000))
     async with SessionLocal() as s:
         d = (await s.execute(select(Delivery))).scalar_one()
