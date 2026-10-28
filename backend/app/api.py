@@ -13,7 +13,8 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .auth import current_user
+from .admin import router as admin_router
+from .auth import current_user, sync_admin_roles
 from .cards import card_for_date, card_to_dict, seed_cards
 from .db import SessionLocal, get_session, init_db
 from .models import Card, SavedCard, User
@@ -59,6 +60,7 @@ def user_to_dict(user: User) -> dict:
         "explain_lang": user.explain_lang or "ru",
         "streak": current_streak(user, user_today(user)),
         "longest_streak": user.longest_streak or 0,
+        "role": user.role or "user",
     }
 
 
@@ -112,7 +114,7 @@ async def list_cards(
     user: User = Depends(current_user),
     session: AsyncSession = Depends(get_session),
 ):
-    stmt = select(Card).order_by(Card.id)
+    stmt = select(Card).where(Card.published.is_(True)).order_by(Card.id)
     if kind:
         stmt = stmt.where(Card.kind == kind)
     if q:
@@ -126,7 +128,7 @@ async def list_cards(
 @router.get("/cards/{card_id}")
 async def get_card(card_id: int, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
     card = await session.get(Card, card_id)
-    if card is None:
+    if card is None or not card.published:
         raise HTTPException(404, "card not found")
     return card_to_dict(card, (await saved_map(session, user.id)).get(card.id))
 
@@ -161,7 +163,7 @@ async def my_saved(user: User = Depends(current_user), session: AsyncSession = D
         await session.execute(
             select(Card, SavedCard.status)
             .join(SavedCard, SavedCard.card_id == Card.id)
-            .where(SavedCard.user_id == user.id)
+            .where(SavedCard.user_id == user.id, Card.published.is_(True))
             .order_by(SavedCard.created_at.desc())
         )
     ).all()
@@ -173,12 +175,14 @@ async def lifespan(_: FastAPI):
     await init_db()
     async with SessionLocal() as session:
         await seed_cards(session)
+        await sync_admin_roles(session)
     yield
 
 
 def create_app() -> FastAPI:
     app = FastAPI(title="Belarusian Daily", lifespan=lifespan)
     app.include_router(router)
+    app.include_router(admin_router)
 
     dist = Path(__file__).resolve().parents[2] / "webapp" / "dist"
     if dist.is_dir():

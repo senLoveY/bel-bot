@@ -42,6 +42,8 @@ MIGRATIONS = [
     ("users", "last_seen_day", "VARCHAR(10)"),
     ("cards", "summary_be", "VARCHAR(512)"),
     ("cards", "body_be", "TEXT"),
+    ("users", "role", "VARCHAR(16) NOT NULL DEFAULT 'user'"),
+    ("cards", "published", "BOOLEAN NOT NULL DEFAULT TRUE"),
 ]
 
 

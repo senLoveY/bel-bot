@@ -87,6 +87,18 @@ blockquote small { display: block; color: var(--muted); margin-top: 2px; font-si
 .field input[type="time"], .field select { padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; }
 .field input[type="checkbox"] { width: 22px; height: 22px; accent-color: var(--red); }
 
+/* адмін-панэль */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.stat { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.stat-value { font-family: "Alegreya", Georgia, serif; font-size: 24px; font-weight: 700; color: var(--red-ink); }
+.row-item { background: var(--paper); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+.row-item .row { margin-top: 6px; justify-content: flex-start; }
+.row-item select { padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; }
+.draft { margin-left: 6px; font-size: 12px; color: var(--red-ink); border: 1px dashed var(--red); border-radius: 4px; padding: 0 5px; }
+.editor textarea, .editor input, .editor select { width: 100%; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: inherit; }
+.editor .field { margin-bottom: 12px; }
+.row .search { flex: 1; }
+
 /* ніжняя панэль */
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--linen); padding-bottom: env(safe-area-inset-bottom); }
 .tabs-row { display: flex; }

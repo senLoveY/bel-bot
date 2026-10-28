@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, tg } from "./api.js";
 import { KIND_MOTIF, maskStyle } from "./ornament.js";
+import Admin from "./Admin.jsx";
 
 const KINDS = { word: "Словы", holiday: "Святы", fact: "Факты" };
 const TABS = [
@@ -289,6 +290,7 @@ export default function App() {
             {tab === "cards" && <Cards onOpen={setOpen} refreshKey={refreshKey} lang={me.explain_lang} />}
             {tab === "saved" && <Saved onOpen={setOpen} refreshKey={refreshKey} me={me} lang={me.explain_lang} />}
             {tab === "settings" && <Settings me={me} setMe={setMe} />}
+            {tab === "admin" && (me.role === "editor" || me.role === "admin") && <Admin me={me} />}
           </>
         )}
       </main>
@@ -296,7 +298,7 @@ export default function App() {
         <nav className="tabs">
           <Band kind="trim" />
           <div className="tabs-row">
-            {TABS.map(([id, label]) => (
+            {(me.role === "editor" || me.role === "admin" ? [...TABS, ["admin", "Адмін"]] : TABS).map(([id, label]) => (
               <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
                 {label}
               </button>

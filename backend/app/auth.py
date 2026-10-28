@@ -41,6 +41,28 @@ def validate_init_data(init_data: str, bot_token: str, max_age: int = MAX_AUTH_A
         return None
 
 
+def require_role(*roles: str):
+    """Зависимость FastAPI: пускает только пользователей с одной из указанных ролей."""
+
+    async def checker(user: User = Depends(current_user)) -> User:
+        if user.role not in roles:
+            raise HTTPException(status_code=403, detail="forbidden")
+        return user
+
+    return checker
+
+
+async def sync_admin_roles(session: AsyncSession) -> None:
+    """Выдаёт роль admin ID из ADMIN_IDS. Эти админы не могут быть понижены через приложение."""
+    for uid in settings.admin_id_set:
+        user = await session.get(User, uid)
+        if user is None:
+            session.add(User(id=uid, first_name="", role="admin"))
+        else:
+            user.role = "admin"
+    await session.commit()
+
+
 async def current_user(
     x_telegram_init_data: str = Header(default=""),
     x_dev_user: str = Header(default=""),

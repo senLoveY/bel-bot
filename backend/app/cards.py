@@ -9,7 +9,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Card
+from .models import Card, Schedule
 
 DATA_FILE = Path(__file__).parent / "data" / "cards.json"
 
@@ -18,33 +18,49 @@ KIND_ICONS = {"word": "📖", "holiday": "🎉", "fact": "💡"}
 
 
 async def seed_cards(session: AsyncSession) -> int:
-    """Идемпотентно загружает карточки из JSON (по slug). Возвращает число новых."""
+    """Добавляет из JSON только новые карточки (по slug). Существующие не трогаем:
+    после запуска база — источник истины, а правки делаются через админку."""
     items = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-    existing = {c.slug: c for c in (await session.execute(select(Card))).scalars()}
+    existing = set((await session.execute(select(Card.slug))).scalars())
     created = 0
     for item in items:
-        card = existing.get(item["slug"])
-        if card is None:
-            card = Card(slug=item["slug"])
-            session.add(card)
-            created += 1
-        for key, value in item.items():
-            setattr(card, key, value)
+        if item["slug"] in existing:
+            continue
+        session.add(Card(**item))
+        created += 1
     await session.commit()
     return created
 
 
 async def card_for_date(session: AsyncSession, day: date) -> Optional[Card]:
-    """Праздник с фиксированной датой имеет приоритет, иначе — ротация по номеру дня."""
+    """Порядок: ручное расписание → праздник на эту дату → ротация по номеру дня."""
+    scheduled = (
+        await session.execute(
+            select(Card)
+            .join(Schedule, Schedule.card_id == Card.id)
+            .where(Schedule.day == day.isoformat(), Card.published.is_(True))
+        )
+    ).scalar_one_or_none()
+    if scheduled is not None:
+        return scheduled
+
     md = day.strftime("%m-%d")
     holiday_id = (
-        await session.execute(select(Card.id).where(Card.month_day == md).order_by(Card.id).limit(1))
+        await session.execute(
+            select(Card.id).where(Card.month_day == md, Card.published.is_(True)).order_by(Card.id).limit(1)
+        )
     ).scalar_one_or_none()
     if holiday_id is not None:
         return await session.get(Card, holiday_id)
 
     ids = (
-        (await session.execute(select(Card.id).where(Card.month_day.is_(None)).order_by(Card.id))).scalars().all()
+        (
+            await session.execute(
+                select(Card.id).where(Card.month_day.is_(None), Card.published.is_(True)).order_by(Card.id)
+            )
+        )
+        .scalars()
+        .all()
     )
     if not ids:
         return None

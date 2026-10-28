@@ -24,6 +24,7 @@ class User(Base):
     streak: Mapped[int] = mapped_column(Integer, default=0)  # дней подряд, когда открывали приложение
     longest_streak: Mapped[int] = mapped_column(Integer, default=0)
     last_seen_day: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)  # YYYY-MM-DD, локальная дата
+    role: Mapped[str] = mapped_column(String(16), default="user")  # user | editor | admin
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -45,6 +46,33 @@ class Card(Base):
     month_day: Mapped[Optional[str]] = mapped_column(String(5), nullable=True, index=True)  # "07-07"
     level: Mapped[str] = mapped_column(String(4), default="A1")
     topic: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    published: Mapped[bool] = mapped_column(Boolean, default=True)  # черновики пользователям не показываются
+
+
+class Schedule(Base):
+    """Ручное назначение: какая карточка покажется в конкретный день. Перекрывает ротацию."""
+
+    __tablename__ = "schedule"
+
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
+    card_id: Mapped[int] = mapped_column(Integer, ForeignKey("cards.id"))
+    set_by: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+
+class CardRevision(Base):
+    """Предложенное изменение карточки. Применяется только после одобрения админом."""
+
+    __tablename__ = "card_revisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    card_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey("cards.id"), nullable=True)  # None — новая карточка
+    payload: Mapped[str] = mapped_column(Text)  # JSON с полями карточки
+    author_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("users.id"))
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | approved | rejected
+    reviewer_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
 
 class Delivery(Base):

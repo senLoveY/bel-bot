@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     scheduler_tick_sec: int = 30
     catchup_hours: int = 6  # после простоя не шлём карточку позднее, чем через N часов
     send_jitter_min: int = 10  # каждому пользователю сдвигаем время на ±N минут, чтобы не слать всем в одну секунду
+
+    # Telegram ID через запятую: при старте им выдаётся роль admin
+    admin_ids: str = ""
+
+    @property
+    def admin_id_set(self) -> set[int]:
+        return {int(x) for x in self.admin_ids.split(",") if x.strip().isdigit()}
     max_attempts: int = 5
 
 
