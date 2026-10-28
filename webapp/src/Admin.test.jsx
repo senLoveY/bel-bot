@@ -55,6 +55,25 @@ describe("Admin panel", () => {
     expect(screen.getByText("Расклад")).toBeInTheDocument();
   });
 
+  it("shows a loading state, then the cards list", async () => {
+    let resolve;
+    api.admin.cards.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+    render(<Admin me={{ id: 1, role: "admin" }} />);
+    screen.getByText("Карткі").click();
+    expect(await screen.findByText("Загрузка карткаў…")).toBeInTheDocument();
+    expect(screen.queryByText("Нічога не знойдзена")).not.toBeInTheDocument();
+    resolve([{ id: 5, kind: "word", be: "вада", accent: "вада́", ru: "вода", level: "A1", published: true }]);
+    expect(await screen.findByText("вада́")).toBeInTheDocument();
+  });
+
+  it("shows a load error for cards instead of an empty list", async () => {
+    api.admin.cards.mockRejectedValueOnce(new Error("500"));
+    render(<Admin me={{ id: 1, role: "admin" }} />);
+    screen.getByText("Карткі").click();
+    expect(await screen.findByText(/Не атрымалася загрузіць карткі/)).toBeInTheDocument();
+    expect(screen.queryByText("Нічога не знойдзена")).not.toBeInTheDocument();
+  });
+
   it("reports a permission error without crashing", async () => {
     api.admin.stats.mockRejectedValue(new Error("403"));
     render(<Admin me={{ id: 1, role: "editor" }} />);

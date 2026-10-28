@@ -129,12 +129,24 @@ function CardEditor({ initial, cardId, isAdmin, onDone }) {
 
 function Cards({ isAdmin }) {
   const [q, setQ] = useState("");
-  const [cards, setCards] = useState([]);
+  const [cards, setCards] = useState(null); // null — ещё грузится
+  const [err, setErr] = useState("");
   const [editing, setEditing] = useState(null); // { card | null }
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
-    const t = setTimeout(() => api.admin.cards({ q, limit: 200 }).then(setCards).catch(() => setCards([])), 200);
+    const t = setTimeout(() => {
+      api.admin
+        .cards({ q, limit: 200 })
+        .then((list) => {
+          setCards(list);
+          setErr("");
+        })
+        .catch((e) => {
+          setCards([]);
+          setErr(errText(e));
+        });
+    }, 200);
     return () => clearTimeout(t);
   }, [q, reload]);
 
@@ -171,7 +183,9 @@ function Cards({ isAdmin }) {
           + Новая
         </button>
       </div>
-      {cards.map((c) => (
+      {cards === null && <p className="muted center">Загрузка карткаў…</p>}
+      {err && <p className="muted center">Не атрымалася загрузіць карткі: {err}</p>}
+      {(cards || []).map((c) => (
         <div key={c.id} className="row-item">
           <div>
             <b>{c.accent || c.be}</b> <span className="muted">{c.kind} · {c.level}</span>
@@ -190,7 +204,7 @@ function Cards({ isAdmin }) {
           </div>
         </div>
       ))}
-      {!cards.length && <p className="muted center">Нічога не знойдзена</p>}
+      {cards && !cards.length && !err && <p className="muted center">Нічога не знойдзена</p>}
     </>
   );
 }
