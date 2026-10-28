@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { api, tg } from "./api.js";
+import { KIND_MOTIF, maskStyle } from "./ornament.js";
 
-const KINDS = { word: "Слова", holiday: "Свята", fact: "Факты" };
-const KIND_ICON = { word: "📖", holiday: "🎉", fact: "💡" };
+const KINDS = { word: "Словы", holiday: "Святы", fact: "Факты" };
 const TABS = [
-  ["today", "Сегодня"],
-  ["cards", "Карточки"],
-  ["saved", "Мои"],
-  ["settings", "Настройки"],
+  ["today", "Сёння"],
+  ["cards", "Карткі"],
+  ["saved", "Мае"],
+  ["settings", "Налады"],
 ];
 
 const TIMEZONES = [
@@ -21,25 +21,39 @@ const TIMEZONES = [
   "America/New_York",
 ];
 
+function Motif({ name, size = 40 }) {
+  return <span className="motif" style={{ width: size, height: size, ...maskStyle(name) }} aria-hidden="true" />;
+}
+
+function Band({ kind = "band" }) {
+  return <div className={kind} style={maskStyle(kind)} aria-hidden="true" />;
+}
+
 function Card({ card, onOpen, onToggleSave }) {
   return (
-    <div className={`card kind-${card.kind}`} onClick={() => onOpen?.(card)}>
-      <div className="card-head">
-        <span>{KIND_ICON[card.kind]}</span>
-        <span className="muted">{card.topic}</span>
-        <span className="level">{card.level}</span>
+    <div className="card" onClick={() => onOpen?.(card)}>
+      <Band kind="trim" />
+      <div className="card-body">
+        <Motif name={KIND_MOTIF[card.kind]} size={40} />
+        <div className="card-text">
+          <div className="card-meta">
+            <span>{card.topic}</span>
+            <span className="level">{card.level}</span>
+          </div>
+          <div className="card-title">{card.kind === "word" ? card.accent || card.be : card.be}</div>
+          <div className="card-sub">{card.ru}</div>
+        </div>
       </div>
-      <div className="card-title">{card.kind === "word" ? card.accent || card.be : card.be}</div>
-      <div className="card-sub">{card.ru}</div>
       {onToggleSave && (
         <button
           className="icon-btn"
+          aria-label={card.saved ? "Прыбраць з захаваных" : "Захаваць"}
           onClick={(e) => {
             e.stopPropagation();
             onToggleSave(card);
           }}
         >
-          {card.saved ? "⭐" : "☆"}
+          {card.saved ? "★" : "☆"}
         </button>
       )}
     </div>
@@ -67,10 +81,18 @@ function Detail({ card, onClose, onChange }) {
       <button className="link" onClick={onClose}>
         ← Назад
       </button>
-      <div className="detail-icon">{KIND_ICON[card.kind]}</div>
+      <div className="detail-hero">
+        <Motif name={KIND_MOTIF[card.kind]} size={84} />
+      </div>
       <h1>{card.kind === "word" ? card.accent || card.be : card.be}</h1>
-      <p className="lead">{card.ru}</p>
-      {card.pos && <p className="muted">{card.pos}</p>}
+      <p className="lead" style={{ textAlign: "center" }}>
+        {card.ru}
+      </p>
+      {card.pos && (
+        <p className="muted" style={{ textAlign: "center" }}>
+          {card.pos}
+        </p>
+      )}
       {card.example_be && (
         <blockquote>
           «{card.example_be}»<small>{card.example_ru}</small>
@@ -79,12 +101,13 @@ function Detail({ card, onClose, onChange }) {
       <p>{card.body}</p>
       <div className="row">
         <button className="btn" onClick={() => set(card.saved === "saved" ? null : "saved")}>
-          {card.saved === "saved" ? "⭐ В сохранённых" : "☆ Сохранить"}
+          {card.saved === "saved" ? "★ У захаваных" : "☆ Захаваць"}
         </button>
         <button className="btn secondary" onClick={() => set(card.saved === "learned" ? null : "learned")}>
-          {card.saved === "learned" ? "✅ Выучено" : "Отметить выученным"}
+          {card.saved === "learned" ? "✓ Вывучана" : "Адзначыць вывучаным"}
         </button>
       </div>
+      <Band />
     </div>
   );
 }
@@ -95,12 +118,12 @@ function Today({ onOpen }) {
     api.today().then(setCard).catch(() => setCard(false));
   }, []);
   if (card === null) return <p className="muted center">Загрузка…</p>;
-  if (card === false) return <p className="muted center">Не удалось загрузить карточку.</p>;
+  if (card === false) return <p className="muted center">Не атрымалася загрузіць картку.</p>;
   return (
     <>
-      <h2>Карточка дня</h2>
+      <h2>Картка дня</h2>
       <Card card={card} onOpen={onOpen} />
-      <p className="muted center">Нажмите на карточку, чтобы узнать больше</p>
+      <p className="muted center">Націсніце на картку, каб даведацца больш</p>
     </>
   );
 }
@@ -127,9 +150,9 @@ function Cards({ onOpen, refreshKey }) {
 
   return (
     <>
-      <input className="search" placeholder="Поиск по слову или переводу" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="search" placeholder="Пошук па слове або перакладзе" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="chips">
-        {[["", "Все"], ...Object.entries(KINDS)].map(([k, label]) => (
+        {[["", "Усе"], ...Object.entries(KINDS)].map(([k, label]) => (
           <button key={k} className={`chip ${kind === k ? "on" : ""}`} onClick={() => setKind(k)}>
             {label}
           </button>
@@ -138,7 +161,7 @@ function Cards({ onOpen, refreshKey }) {
       {cards.map((c) => (
         <Card key={c.id} card={c} onOpen={onOpen} onToggleSave={toggle} />
       ))}
-      {!cards.length && <p className="muted center">Ничего не найдено</p>}
+      {!cards.length && <p className="muted center">Нічога не знойдзена</p>}
     </>
   );
 }
@@ -152,14 +175,14 @@ function Saved({ onOpen, refreshKey }) {
   const learned = cards.filter((c) => c.saved === "learned").length;
   return (
     <>
-      <h2>Мой словарь</h2>
+      <h2>Мой слоўнік</h2>
       <p className="muted">
-        Сохранено: {cards.length} · выучено: {learned}
+        Захавана: {cards.length} · вывучана: {learned}
       </p>
       {cards.map((c) => (
         <Card key={c.id} card={c} onOpen={onOpen} />
       ))}
-      {!cards.length && <p className="muted center">Пока пусто. Сохраняйте карточки звёздочкой ⭐</p>}
+      {!cards.length && <p className="muted center">Пакуль пуста. Захоўвайце карткі зорачкай ☆</p>}
     </>
   );
 }
@@ -178,13 +201,13 @@ function Settings({ me, setMe }) {
   const zones = TIMEZONES.includes(me.tz) ? TIMEZONES : [me.tz, ...TIMEZONES];
   return (
     <>
-      <h2>Настройки рассылки</h2>
+      <h2>Налады рассылкі</h2>
       <label className="field">
-        Время ежедневной карточки
+        Час штодзённай карткі
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} onBlur={() => time !== me.send_time && update({ send_time: time })} />
       </label>
       <label className="field">
-        Часовой пояс
+        Часавы пояс
         <select value={me.tz} onChange={(e) => update({ tz: e.target.value })}>
           {zones.map((z) => (
             <option key={z}>{z}</option>
@@ -193,9 +216,9 @@ function Settings({ me, setMe }) {
       </label>
       <label className="field row">
         <input type="checkbox" checked={me.is_active} onChange={(e) => update({ is_active: e.target.checked })} />
-        Присылать карточки в чат
+        Дасылаць карткі ў чат
       </label>
-      {saved && <p className="ok">Сохранено ✓</p>}
+      {saved && <p className="ok">Захавана ✓</p>}
     </>
   );
 }
@@ -212,7 +235,7 @@ export default function App() {
     (async () => {
       try {
         let user = await api.me();
-        // при первом запуске подхватываем часовой пояс устройства
+        // пры першым запуску падхопліваем часавы пояс прылады
         if (!user.tz_set) {
           const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
           if (tz) user = await api.settings({ tz }).catch(() => user);
@@ -231,11 +254,16 @@ export default function App() {
     setRefreshKey((k) => k + 1);
   }, []);
 
-  if (error) return <p className="center muted pad">Откройте приложение через Telegram-бота.</p>;
+  if (error) return <p className="center muted pad">Адкрыйце праграму праз Telegram-бота.</p>;
   if (!me) return <p className="center muted pad">Загрузка…</p>;
 
   return (
     <div className="app">
+      <header className="header">
+        <div className="brand">Беларуская штодня</div>
+        <p className="brand-sub">слова, святы і факты</p>
+        <Band />
+      </header>
       <main className="pad">
         {open ? (
           <Detail card={open} onClose={close} onChange={setOpen} />
@@ -250,11 +278,14 @@ export default function App() {
       </main>
       {!open && (
         <nav className="tabs">
-          {TABS.map(([id, label]) => (
-            <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
-              {label}
-            </button>
-          ))}
+          <Band kind="trim" />
+          <div className="tabs-row">
+            {TABS.map(([id, label]) => (
+              <button key={id} className={tab === id ? "on" : ""} onClick={() => setTab(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </nav>
       )}
     </div>
