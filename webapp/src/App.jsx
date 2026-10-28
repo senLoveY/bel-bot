@@ -260,7 +260,7 @@ export default function App() {
   return (
     <div className="app">
       <header className="header">
-        <div className="brand">Беларуская штодня</div>
+        <div className="brand">Зярнятка</div>
         <p className="brand-sub">слова, святы і факты</p>
         <Band />
       </header>

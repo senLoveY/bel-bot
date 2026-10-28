@@ -50,7 +50,7 @@ async def cmd_start(message: Message) -> None:
         user.is_active = True
         await session.commit()
         await message.answer(
-            f"Прывітанне, {message.from_user.first_name}! 👋\n\n"
+            f"Прывітанне, {message.from_user.first_name}! 👋 Вітаем у Зярнятцы.\n\n"
             "Я буду штодня дасылаць новае беларускае слова, цікавы факт або народнае свята. "
             f"Час дастаўкі зараз — <b>{user.send_time}</b>, змяніць яго можна ў праграме.",
             reply_markup=open_app_keyboard(tab="settings", text="⚙️ Наладзіць час"),
