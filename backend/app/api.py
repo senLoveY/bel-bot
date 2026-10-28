@@ -35,8 +35,9 @@ TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 
 
 def user_today(user: User):
+    # у только что созданного пользователя tz ещё None: default применяется при записи в базу
     try:
-        tz = ZoneInfo(user.tz)
+        tz = ZoneInfo(user.tz or settings.default_tz)
     except ZoneInfoNotFoundError:
         tz = timezone.utc
     return datetime.now(tz).date()

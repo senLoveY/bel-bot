@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, tg } from "./api.js";
 import { KIND_MOTIF, maskStyle } from "./ornament.js";
 import Admin from "./Admin.jsx";
+import { pick, pickBody } from "./lang.js";
 
 const KINDS = { word: "Словы", holiday: "Святы", fact: "Факты" };
 const TABS = [
@@ -21,10 +22,6 @@ const TIMEZONES = [
   "Europe/London",
   "America/New_York",
 ];
-
-// пояснения на выбранном языке; если белорусского текста нет, показываем русский
-const pick = (card, lang) => (lang === "be" && card.summary_be ? card.summary_be : card.ru);
-const pickBody = (card, lang) => (lang === "be" && card.body_be ? card.body_be : card.body);
 
 function Motif({ name, size = 40 }) {
   return <span className="motif" style={{ width: size, height: size, ...maskStyle(name) }} aria-hidden="true" />;

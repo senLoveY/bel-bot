@@ -1,0 +1,43 @@
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
+
+const ME = {
+  id: 1,
+  first_name: "Ala",
+  role: "user",
+  tz: "Europe/Minsk",
+  tz_set: true,
+  send_time: "09:00",
+  is_active: true,
+  explain_lang: "ru",
+  streak: 0,
+  longest_streak: 0,
+};
+
+vi.mock("./api.js", () => ({
+  tg: undefined,
+  api: {
+    me: vi.fn(async () => ({ id: 1, first_name: "Ala", role: "user", tz: "Europe/Minsk", tz_set: true, send_time: "09:00", is_active: true, explain_lang: "ru", streak: 0, longest_streak: 0 })),
+    today: vi.fn(async () => ({ id: 1, kind: "word", be: "прывітанне", accent: null, ru: "приветствие", level: "A1", topic: "Зносіны", saved: null })),
+    settings: vi.fn(async () => ({})),
+    card: vi.fn(),
+  },
+}));
+
+import App from "./App.jsx";
+
+describe("Mini App shell", () => {
+  it("shows the brand and today's card for a regular user", async () => {
+    render(<App />);
+    expect(await screen.findByText("Зярнятка")).toBeInTheDocument();
+    expect(await screen.findByText("прывітанне")).toBeInTheDocument();
+    expect(screen.queryByText("Адмін")).not.toBeInTheDocument();
+  });
+
+  it("adds the admin tab for editors and admins", async () => {
+    const { api } = await import("./api.js");
+    api.me.mockResolvedValueOnce({ ...ME, role: "admin" });
+    render(<App />);
+    expect(await screen.findByText("Адмін")).toBeInTheDocument();
+  });
+});
