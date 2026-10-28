@@ -1,0 +1,49 @@
+:root {
+  --bg: var(--tg-theme-bg-color, #ffffff);
+  --fg: var(--tg-theme-text-color, #1c1c1e);
+  --hint: var(--tg-theme-hint-color, #8e8e93);
+  --link: var(--tg-theme-link-color, #2481cc);
+  --btn: var(--tg-theme-button-color, #2481cc);
+  --btn-fg: var(--tg-theme-button-text-color, #ffffff);
+  --card: var(--tg-theme-secondary-bg-color, #f2f2f7);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.45 -apple-system, system-ui, "Segoe UI", Roboto, sans-serif; }
+h1 { font-size: 28px; margin: 8px 0; }
+h2 { font-size: 20px; margin: 4px 0 12px; }
+button { font: inherit; cursor: pointer; }
+
+.pad { padding: 16px 16px 84px; }
+.center { text-align: center; }
+.muted { color: var(--hint); font-size: 14px; }
+.ok { color: #2e9d57; }
+
+.card { position: relative; background: var(--card); border-radius: 16px; padding: 14px 44px 14px 16px; margin-bottom: 10px; cursor: pointer; }
+.card-head { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-bottom: 4px; }
+.card-head .level { margin-left: auto; font-size: 12px; color: var(--hint); border: 1px solid var(--hint); border-radius: 6px; padding: 0 5px; }
+.card-title { font-size: 22px; font-weight: 600; }
+.card-sub { color: var(--hint); margin-top: 2px; }
+.icon-btn { position: absolute; right: 8px; top: 34px; background: none; border: 0; font-size: 22px; }
+
+.search { width: 100%; padding: 10px 12px; border-radius: 12px; border: 0; background: var(--card); color: var(--fg); margin-bottom: 10px; }
+.chips { display: flex; gap: 8px; margin-bottom: 12px; overflow-x: auto; }
+.chip { border: 0; border-radius: 16px; padding: 6px 14px; background: var(--card); color: var(--fg); white-space: nowrap; }
+.chip.on { background: var(--btn); color: var(--btn-fg); }
+
+.detail-icon { font-size: 40px; }
+.lead { font-size: 18px; margin: 0 0 6px; }
+blockquote { margin: 14px 0; padding: 10px 14px; border-left: 3px solid var(--btn); background: var(--card); border-radius: 0 12px 12px 0; }
+blockquote small { display: block; color: var(--hint); margin-top: 2px; }
+.link { background: none; border: 0; color: var(--link); padding: 0; margin-bottom: 8px; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; }
+.btn { background: var(--btn); color: var(--btn-fg); border: 0; border-radius: 12px; padding: 10px 16px; }
+.btn.secondary { background: var(--card); color: var(--fg); }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.field.row { flex-direction: row; align-items: center; }
+.field input[type="time"], .field select { padding: 10px 12px; border-radius: 12px; border: 0; background: var(--card); color: var(--fg); font: inherit; }
+
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--bg); border-top: 1px solid var(--card); padding-bottom: env(safe-area-inset-bottom); }
+.tabs button { flex: 1; padding: 14px 0; background: none; border: 0; color: var(--hint); }
+.tabs button.on { color: var(--btn); font-weight: 600; }

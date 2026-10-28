@@ -1,0 +1,176 @@
+from __future__ import annotations
+
+import re
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Optional
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from .auth import current_user
+from .cards import card_for_date, card_to_dict, seed_cards
+from .db import SessionLocal, get_session, init_db
+from .models import Card, SavedCard, User
+
+router = APIRouter(prefix="/api")
+
+TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+def user_today(user: User):
+    try:
+        tz = ZoneInfo(user.tz)
+    except ZoneInfoNotFoundError:
+        tz = timezone.utc
+    return datetime.now(tz).date()
+
+
+async def saved_map(session: AsyncSession, user_id: int) -> dict:
+    rows = (await session.execute(select(SavedCard).where(SavedCard.user_id == user_id))).scalars()
+    return {r.card_id: r.status for r in rows}
+
+
+class SettingsIn(BaseModel):
+    send_time: Optional[str] = None
+    tz: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class SaveIn(BaseModel):
+    status: str = "saved"  # saved | learned
+
+
+def user_to_dict(user: User) -> dict:
+    return {
+        "id": user.id,
+        "first_name": user.first_name,
+        "tz": user.tz,
+        "tz_set": user.tz_set,
+        "send_time": user.send_time,
+        "is_active": user.is_active,
+    }
+
+
+@router.get("/me")
+async def me(user: User = Depends(current_user)):
+    return user_to_dict(user)
+
+
+@router.put("/me/settings")
+async def update_settings(body: SettingsIn, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    if body.send_time is not None:
+        if not TIME_RE.match(body.send_time):
+            raise HTTPException(422, "send_time must be HH:MM")
+        user.send_time = body.send_time
+    if body.tz is not None:
+        try:
+            ZoneInfo(body.tz)
+        except (ZoneInfoNotFoundError, ValueError):
+            raise HTTPException(422, "unknown timezone")
+        user.tz = body.tz
+        user.tz_set = True
+    if body.is_active is not None:
+        user.is_active = body.is_active
+    session.add(user)
+    await session.commit()
+    return user_to_dict(user)
+
+
+@router.get("/today")
+async def today(user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    card = await card_for_date(session, user_today(user))
+    if card is None:
+        raise HTTPException(404, "no cards")
+    return card_to_dict(card, (await saved_map(session, user.id)).get(card.id))
+
+
+@router.get("/cards")
+async def list_cards(
+    kind: Optional[str] = None,
+    q: Optional[str] = None,
+    limit: int = Query(50, le=200),
+    offset: int = 0,
+    user: User = Depends(current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    stmt = select(Card).order_by(Card.id)
+    if kind:
+        stmt = stmt.where(Card.kind == kind)
+    if q:
+        like = f"%{q.lower()}%"
+        stmt = stmt.where(Card.be.ilike(like) | Card.ru.ilike(like))
+    cards = (await session.execute(stmt.limit(limit).offset(offset))).scalars().all()
+    saved = await saved_map(session, user.id)
+    return [card_to_dict(c, saved.get(c.id)) for c in cards]
+
+
+@router.get("/cards/{card_id}")
+async def get_card(card_id: int, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    card = await session.get(Card, card_id)
+    if card is None:
+        raise HTTPException(404, "card not found")
+    return card_to_dict(card, (await saved_map(session, user.id)).get(card.id))
+
+
+@router.put("/cards/{card_id}/save")
+async def save_card(card_id: int, body: SaveIn, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    if body.status not in ("saved", "learned"):
+        raise HTTPException(422, "bad status")
+    if await session.get(Card, card_id) is None:
+        raise HTTPException(404, "card not found")
+    row = await session.get(SavedCard, (user.id, card_id))
+    if row is None:
+        session.add(SavedCard(user_id=user.id, card_id=card_id, status=body.status))
+    else:
+        row.status = body.status
+    await session.commit()
+    return {"card_id": card_id, "status": body.status}
+
+
+@router.delete("/cards/{card_id}/save")
+async def unsave_card(card_id: int, user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    row = await session.get(SavedCard, (user.id, card_id))
+    if row is not None:
+        await session.delete(row)
+        await session.commit()
+    return {"card_id": card_id, "status": None}
+
+
+@router.get("/me/saved")
+async def my_saved(user: User = Depends(current_user), session: AsyncSession = Depends(get_session)):
+    rows = (
+        await session.execute(
+            select(Card, SavedCard.status)
+            .join(SavedCard, SavedCard.card_id == Card.id)
+            .where(SavedCard.user_id == user.id)
+            .order_by(SavedCard.created_at.desc())
+        )
+    ).all()
+    return [card_to_dict(card, status) for card, status in rows]
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await init_db()
+    async with SessionLocal() as session:
+        await seed_cards(session)
+    yield
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="Belarusian Daily", lifespan=lifespan)
+    app.include_router(router)
+
+    dist = Path(__file__).resolve().parents[2] / "webapp" / "dist"
+    if dist.is_dir():
+        app.mount("/", StaticFiles(directory=dist, html=True), name="webapp")
+    return app
+
+
+app = create_app()
