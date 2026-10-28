@@ -1,41 +1,48 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Admin from "./Admin.jsx";
 import { api } from "./api.js";
 import "./styles.css";
 
-// имя бота без @ — для виджета входа; домен должен быть разрешён в BotFather (/setdomain)
-const BOT_USERNAME = "belmov_bot";
+// ID бота (часть токена до двоеточия) — для входа через Telegram; домен должен быть в BotFather (/setdomain)
+const BOT_ID = "8800403308";
+
+// Вход через страницу Telegram: после подтверждения Telegram возвращает нас на /admin с подписанными данными
+function loginUrl() {
+  const params = new URLSearchParams({
+    bot_id: BOT_ID,
+    origin: location.origin,
+    request_access: "write",
+    return_to: `${location.origin}/admin`,
+  });
+  return `https://oauth.telegram.org/auth?${params}`;
+}
 
 function Login({ onError }) {
-  const box = useRef(null);
-
   useEffect(() => {
-    window.onTelegramAuth = async (user) => {
-      const res = await fetch("/api/web/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(user),
-      });
+    const params = new URLSearchParams(location.search);
+    if (!params.get("hash")) return;
+
+    // данные пришли от Telegram: отправляем их на сервер для проверки подписи
+    const data = Object.fromEntries(params);
+    history.replaceState({}, "", "/admin");
+    fetch("/api/web/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    }).then((res) => {
       if (res.ok) location.reload();
       else onError(res.status === 403 ? "Недастаткова правоў" : "Не ўдалося ўвайсці. Паспрабуйце яшчэ раз.");
-    };
-
-    const script = document.createElement("script");
-    script.src = "https://telegram.org/js/telegram-widget.js?22";
-    script.async = true;
-    script.dataset.telegramLogin = BOT_USERNAME;
-    script.dataset.size = "large";
-    script.dataset.requestAccess = "write";
-    script.dataset.onauth = "onTelegramAuth(user)";
-    box.current.appendChild(script);
-
-    return () => {
-      delete window.onTelegramAuth;
-    };
+    });
   }, [onError]);
 
-  return <div ref={box} className="center" />;
+  return (
+    <p className="center">
+      <a className="btn" href={loginUrl()}>
+        Увайсці праз Telegram
+      </a>
+    </p>
+  );
 }
 
 async function logout() {
