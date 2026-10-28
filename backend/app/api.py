@@ -8,7 +8,7 @@ from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -20,6 +20,7 @@ from .auth import (
     SESSION_TTL,
     current_user,
     make_session_token,
+    read_login_token,
     sync_admin_roles,
     validate_login_widget,
 )
@@ -180,6 +181,18 @@ async def my_saved(user: User = Depends(current_user), session: AsyncSession = D
     return [card_to_dict(card, status) for card, status in rows]
 
 
+def set_session_cookie(response: Response, user_id: int) -> None:
+    response.set_cookie(
+        SESSION_COOKIE,
+        make_session_token(user_id),
+        max_age=SESSION_TTL,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+
+
 @router.post("/web/login")
 async def web_login(response: Response, data: dict = Body(...), session: AsyncSession = Depends(get_session)):
     """Вход на сайт через Telegram Login Widget: проверяем подпись и выдаём cookie-сессию."""
@@ -192,16 +205,22 @@ async def web_login(response: Response, data: dict = Body(...), session: AsyncSe
         await session.commit()
     if user.role not in ("editor", "admin"):
         raise HTTPException(403, "forbidden")
-    response.set_cookie(
-        SESSION_COOKIE,
-        make_session_token(user.id),
-        max_age=SESSION_TTL,
-        httponly=True,
-        secure=True,
-        samesite="lax",
-        path="/",
-    )
+    set_session_cookie(response, user.id)
     return user_to_dict(user)
+
+
+@router.get("/web/tg-login")
+async def tg_login(token: str, session: AsyncSession = Depends(get_session)):
+    """Ссылка из бота (/admin): одноразовый токен -> сессия -> переход в админку."""
+    user_id = read_login_token(token)
+    if user_id is None:
+        raise HTTPException(401, "link expired or already used")
+    user = await session.get(User, user_id)
+    if user is None or user.role not in ("editor", "admin"):
+        raise HTTPException(403, "forbidden")
+    response = RedirectResponse("/admin", status_code=303)
+    set_session_cookie(response, user.id)
+    return response
 
 
 @router.post("/web/logout")

@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import secrets
 import time
 from typing import Optional
 from urllib.parse import parse_qsl
@@ -78,6 +79,35 @@ def read_session_token(token: str) -> Optional[int]:
         expected = hmac.new(_session_key(), body.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig) or int(exp) < time.time():
             return None
+        return int(user_id)
+    except ValueError:
+        return None
+
+
+LOGIN_TTL = 120  # ссылка из бота живёт 2 минуты и работает один раз
+_used_login_nonces: set = set()
+
+
+def _login_key() -> bytes:
+    return hashlib.sha256(("tg-login|" + settings.bot_token).encode()).digest()
+
+
+def make_login_token(user_id: int) -> str:
+    body = f"{user_id}.{int(time.time()) + LOGIN_TTL}.{secrets.token_urlsafe(16)}"
+    sig = hmac.new(_login_key(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{body}.{sig}"
+
+
+def read_login_token(token: str) -> Optional[int]:
+    try:
+        user_id, exp, nonce, sig = token.split(".")
+        body = f"{user_id}.{exp}.{nonce}"
+        expected = hmac.new(_login_key(), body.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig) or int(exp) < time.time():
+            return None
+        if nonce in _used_login_nonces:
+            return None
+        _used_login_nonces.add(nonce)
         return int(user_id)
     except ValueError:
         return None

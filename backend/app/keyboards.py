@@ -32,3 +32,11 @@ def open_app_keyboard(tab: Optional[str] = None, text: str = "Адкрыць п�
     return InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text=text, web_app=WebAppInfo(url=webapp_url(tab=tab)))]]
     )
+
+
+def admin_login_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Одноразовая ссылка на вход в админку (живёт 2 минуты)."""
+    from .auth import make_login_token
+
+    url = f"{settings.webapp_url}/api/web/tg-login?token={make_login_token(user_id)}"
+    return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔐 Увайсці ў адмін-панэль", url=url)]])

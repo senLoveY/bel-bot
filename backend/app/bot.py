@@ -14,7 +14,7 @@ from .cards import card_for_date, format_card_message, seed_cards
 from .config import settings
 from .db import SessionLocal, init_db, utcnow
 from .delivery import run_scheduler
-from .keyboards import card_keyboard, open_app_keyboard
+from .keyboards import admin_login_keyboard, card_keyboard, open_app_keyboard
 from .models import Card, Delivery, SavedCard, User
 
 router = Router()
@@ -43,8 +43,28 @@ async def send_today_card(message: Message, session, user: User) -> None:
         await session.rollback()
 
 
+@router.message(Command("admin"))
+async def cmd_admin(message: Message) -> None:
+    async with SessionLocal() as session:
+        user = await get_or_create_user(session, message.from_user)
+        await session.commit()
+        role = user.role
+    if role not in ("editor", "admin"):
+        await message.answer("У вас няма доступу да адмін-панэлі.")
+        return
+    await message.answer(
+        "Спасылка для ўваходу дзейнічае 2 хвіліны і працуе адзін раз.",
+        reply_markup=admin_login_keyboard(message.from_user.id),
+    )
+
+
 @router.message(Command("start"))
 async def cmd_start(message: Message) -> None:
+    # t.me/<бот>?start=admin — вход в админку со страницы сайта
+    args = (message.text or "").split(maxsplit=1)
+    if len(args) == 2 and args[1] == "admin":
+        await cmd_admin(message)
+        return
     async with SessionLocal() as session:
         user = await get_or_create_user(session, message.from_user)
         user.is_active = True
