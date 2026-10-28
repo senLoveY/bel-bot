@@ -7,14 +7,23 @@ from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .admin import router as admin_router
-from .auth import current_user, sync_admin_roles
+from .auth import (
+    SESSION_COOKIE,
+    SESSION_TTL,
+    current_user,
+    make_session_token,
+    sync_admin_roles,
+    validate_login_widget,
+)
+from .config import settings
 from .cards import card_for_date, card_to_dict, seed_cards
 from .db import SessionLocal, get_session, init_db
 from .models import Card, SavedCard, User
@@ -170,6 +179,36 @@ async def my_saved(user: User = Depends(current_user), session: AsyncSession = D
     return [card_to_dict(card, status) for card, status in rows]
 
 
+@router.post("/web/login")
+async def web_login(response: Response, data: dict = Body(...), session: AsyncSession = Depends(get_session)):
+    """Вход на сайт через Telegram Login Widget: проверяем подпись и выдаём cookie-сессию."""
+    if not validate_login_widget(data, settings.bot_token):
+        raise HTTPException(401, "invalid login data")
+    user = await session.get(User, int(data["id"]))
+    if user is None:
+        user = User(id=int(data["id"]), first_name=data.get("first_name", ""), username=data.get("username"))
+        session.add(user)
+        await session.commit()
+    if user.role not in ("editor", "admin"):
+        raise HTTPException(403, "forbidden")
+    response.set_cookie(
+        SESSION_COOKIE,
+        make_session_token(user.id),
+        max_age=SESSION_TTL,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        path="/",
+    )
+    return user_to_dict(user)
+
+
+@router.post("/web/logout")
+async def web_logout(response: Response):
+    response.delete_cookie(SESSION_COOKIE, path="/")
+    return {"ok": True}
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await init_db()
@@ -186,6 +225,8 @@ def create_app() -> FastAPI:
 
     dist = Path(__file__).resolve().parents[2] / "webapp" / "dist"
     if dist.is_dir():
+        # сайт админки должен быть объявлен до общего маршрута статики
+        app.add_api_route("/admin", lambda: FileResponse(dist / "admin.html"), include_in_schema=False)
         app.mount("/", StaticFiles(directory=dist, html=True), name="webapp")
     return app
 
