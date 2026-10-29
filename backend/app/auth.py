@@ -9,6 +9,7 @@ from typing import Optional, Tuple
 from urllib.parse import parse_qsl
 
 from fastapi import Cookie, Depends, Header, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .config import settings
@@ -137,7 +138,11 @@ async def current_user(
 
     user = await session.get(User, tg["id"])
     if user is None:
-        user = User(id=tg["id"], first_name=tg.get("first_name", ""), username=tg.get("username"))
-        session.add(user)
-        await session.commit()
+        session.add(User(id=tg["id"], first_name=tg.get("first_name", ""), username=tg.get("username")))
+        try:
+            await session.commit()
+        except IntegrityError:
+            # пользователя только что создал бот (/start) или параллельный запрос Mini App
+            await session.rollback()
+        user = await session.get(User, tg["id"])
     return user

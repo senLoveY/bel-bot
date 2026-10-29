@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 const ME = {
@@ -39,5 +39,14 @@ describe("Mini App shell", () => {
     api.me.mockResolvedValueOnce({ ...ME, role: "admin" });
     render(<App />);
     expect(await screen.findByText("Адмін")).toBeInTheDocument();
+  });
+
+  it("shows why settings were not saved instead of failing silently", async () => {
+    const { api } = await import("./api.js");
+    api.settings.mockRejectedValueOnce(Object.assign(new Error("422"), { detail: "unknown timezone" }));
+    render(<App />);
+    fireEvent.click(await screen.findByText("Налады"));
+    fireEvent.change(screen.getByDisplayValue("Руская"), { target: { value: "be" } });
+    expect(await screen.findByText("Не атрымалася захаваць: unknown timezone")).toBeInTheDocument();
   });
 });

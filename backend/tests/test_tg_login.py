@@ -1,5 +1,5 @@
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from app import auth, bot
 from app.api import create_app
-from app.db import SessionLocal
+from app.db import SessionLocal, utcnow
 from app.models import UsedLoginToken, User
 
 
@@ -86,7 +86,7 @@ async def test_used_link_is_remembered_in_the_database(client):
 async def test_old_used_tokens_are_cleaned_up(client):
     await set_role(67, "admin")
     async with SessionLocal() as s:
-        s.add(UsedLoginToken(nonce="old", used_at=datetime.utcnow() - timedelta(days=3)))
+        s.add(UsedLoginToken(nonce="old", used_at=utcnow() - timedelta(days=3)))
         await s.commit()
     await client.get(f"/api/web/tg-login?token={auth.make_login_token(67)}", follow_redirects=False)
     async with SessionLocal() as s:

@@ -78,8 +78,6 @@ async def health():
         "serverless": settings.serverless,
         "vercel_env": os.environ.get("VERCEL_ENV"),
         "database_driver": settings.database_url.split("://", 1)[0],
-        # схема из окружения на момент запроса (без хоста и пароля): видно, если переменная появилась после старта
-        "env_database_driver": os.environ.get("DATABASE_URL", "").split("://", 1)[0] or None,
         "env_set": {name: bool(os.environ.get(name)) for name in HEALTH_VARS},
     }
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import html
 import logging
 from typing import Optional
 
@@ -11,10 +12,10 @@ from aiogram.types import CallbackQuery, Message
 from sqlalchemy.exc import IntegrityError
 
 from .analytics import record_event
-from .cards import card_for_date, format_card_message, seed_cards
+from .cards import card_for_date, format_card_message
 from .clock import user_today
 from .config import settings
-from .db import SessionLocal, init_db, utcnow
+from .db import SessionLocal, utcnow
 from .delivery import run_scheduler
 from .keyboards import admin_login_keyboard, card_keyboard, open_app_keyboard
 from .models import Card, Delivery, SavedCard, User
@@ -24,10 +25,15 @@ router = Router()
 
 async def get_or_create_user(session, tg_user) -> User:
     user = await session.get(User, tg_user.id)
-    if user is None:
-        user = User(id=tg_user.id, first_name=tg_user.first_name or "", username=tg_user.username)
-        session.add(user)
-    return user
+    if user is not None:
+        return user
+    session.add(User(id=tg_user.id, first_name=tg_user.first_name or "", username=tg_user.username))
+    try:
+        await session.commit()
+    except IntegrityError:
+        # того же пользователя только что создал параллельный запрос (Mini App или другое обновление)
+        await session.rollback()
+    return await session.get(User, tg_user.id)
 
 
 async def send_today_card(message: Message, session, user: User) -> None:
@@ -72,7 +78,7 @@ async def cmd_start(message: Message) -> None:
         user.is_active = True
         await session.commit()
         await message.answer(
-            f"Прывітанне, {message.from_user.first_name}! 👋 Вітаем у Зярнятцы.\n\n"
+            f"Прывітанне, {html.escape(message.from_user.first_name or '')}! 👋 Вітаем у Зярнятцы.\n\n"
             "Я буду штодня дасылаць новае беларускае слова, цікавы факт або народнае свята. "
             f"Час дастаўкі зараз — <b>{user.send_time}</b>, змяніць яго можна ў праграме.",
             reply_markup=open_app_keyboard(tab="settings", text="⚙️ Наладзіць час"),
@@ -148,12 +154,12 @@ def get_dispatcher() -> Dispatcher:
 async def main() -> None:
     """Локальный режим: polling + встроенный планировщик. Перед запуском снимите webhook
     (python -m app.manage delete-webhook), иначе Telegram не отдаст обновления через polling."""
+    from .setup import setup_database
+
     logging.basicConfig(level=logging.INFO)
     if not settings.bot_token:
         raise SystemExit("BOT_TOKEN is not set")
-    await init_db()
-    async with SessionLocal() as session:
-        await seed_cards(session)
+    await setup_database()  # миграции, новые карточки, роли из ADMIN_IDS — как у API
 
     bot = make_bot()
     scheduler = asyncio.create_task(run_scheduler(bot))

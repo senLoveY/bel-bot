@@ -5,6 +5,9 @@ import Admin from "./Admin.jsx";
 import { pick, pickBody } from "./lang.js";
 
 const KINDS = { word: "Словы", holiday: "Святы", fact: "Факты" };
+
+// текст ошибки для пользователя: с пояснением сервера, если оно есть
+const failText = (e) => `Не атрымалася захаваць${e?.detail ? `: ${e.detail}` : ""}`;
 const TABS = [
   ["today", "Сёння"],
   ["cards", "Карткі"],
@@ -63,10 +66,16 @@ function Card({ card, lang, onOpen, onToggleSave }) {
 }
 
 function Detail({ card, lang, onClose, onChange }) {
+  const [err, setErr] = useState("");
   const set = async (status) => {
-    if (status) await api.save(card.id, status);
-    else await api.unsave(card.id);
-    onChange({ ...card, saved: status });
+    try {
+      if (status) await api.save(card.id, status);
+      else await api.unsave(card.id);
+      setErr("");
+      onChange({ ...card, saved: status });
+    } catch (e) {
+      setErr(failText(e));
+    }
   };
 
   useEffect(() => {
@@ -109,6 +118,7 @@ function Detail({ card, lang, onClose, onChange }) {
           {card.saved === "learned" ? "✓ Вывучана" : "Адзначыць вывучаным"}
         </button>
       </div>
+      {err && <p className="ok">{err}</p>}
       <Band />
     </div>
   );
@@ -143,11 +153,17 @@ function Cards({ onOpen, refreshKey, lang }) {
     return () => clearTimeout(t);
   }, [kind, q, refreshKey]);
 
+  const [err, setErr] = useState("");
   const toggle = async (card) => {
     const next = card.saved ? null : "saved";
-    if (next) await api.save(card.id, next);
-    else await api.unsave(card.id);
-    setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, saved: next } : c)));
+    try {
+      if (next) await api.save(card.id, next);
+      else await api.unsave(card.id);
+      setErr("");
+      setCards((cs) => cs.map((c) => (c.id === card.id ? { ...c, saved: next } : c)));
+    } catch (e) {
+      setErr(failText(e));
+    }
   };
 
   return (
@@ -160,6 +176,7 @@ function Cards({ onOpen, refreshKey, lang }) {
           </button>
         ))}
       </div>
+      {err && <p className="ok">{err}</p>}
       {cards.map((c) => (
         <Card key={c.id} card={c} lang={lang} onOpen={onOpen} onToggleSave={toggle} />
       ))}
@@ -195,12 +212,18 @@ function Saved({ onOpen, refreshKey, me, lang }) {
 function Settings({ me, setMe }) {
   const [time, setTime] = useState(me.send_time);
   const [saved, setSaved] = useState(false);
+  const [err, setErr] = useState("");
 
   const update = async (patch) => {
-    const next = await api.settings(patch);
-    setMe(next);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
+    try {
+      const next = await api.settings(patch);
+      setMe(next);
+      setErr("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1500);
+    } catch (e) {
+      setErr(failText(e));
+    }
   };
 
   const zones = TIMEZONES.includes(me.tz) ? TIMEZONES : [me.tz, ...TIMEZONES];
@@ -231,6 +254,7 @@ function Settings({ me, setMe }) {
         Дасылаць карткі ў чат
       </label>
       {saved && <p className="ok">Захавана ✓</p>}
+      {err && <p className="ok">{err}</p>}
     </>
   );
 }

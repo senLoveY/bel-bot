@@ -8,3 +8,5 @@ webapp/dist/
 .pytest_cache/
 .coverage
 coverage/
+.DS_Store
+.claude/

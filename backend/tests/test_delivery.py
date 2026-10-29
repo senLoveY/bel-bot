@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
 from sqlalchemy import select
 
-from app.db import SessionLocal
+from app.db import SessionLocal, utcnow
 from app.delivery import RateLimiter, enqueue_due, is_due, jitter_minutes, process_pending
 from app.models import Delivery, User
 
@@ -85,4 +85,4 @@ async def test_retry_after_keeps_pending_and_delays():
     exc = TelegramRetryAfter(method=MagicMock(), message="Too Many Requests", retry_after=30)
     d, u = await run_once(fake_bot(exc))
     assert d.status == "pending" and d.attempts == 0
-    assert d.next_attempt_at > datetime.utcnow() and u.is_active
+    assert d.next_attempt_at > utcnow() and u.is_active

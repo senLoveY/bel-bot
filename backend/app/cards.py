@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Card, Schedule
@@ -28,7 +29,12 @@ async def seed_cards(session: AsyncSession) -> int:
             continue
         session.add(Card(**item))
         created += 1
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        # на Vercel два экземпляра могут стартовать одновременно: карточки уже добавил другой
+        await session.rollback()
+        return 0
     return created
 
 

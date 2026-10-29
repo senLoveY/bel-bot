@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy.pool import NullPool
 
@@ -34,8 +34,8 @@ SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 
 def utcnow() -> datetime:
-    """Наивное UTC-время: так одинаково хранится и в SQLite, и в Postgres."""
-    return datetime.utcnow()
+    """Наивное UTC-время: так одинаково хранится и в SQLite, и в Postgres (datetime.utcnow устарел в 3.12)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 async def init_db() -> None:
@@ -54,4 +54,4 @@ async def get_session():
         yield session
 
 
-__all__ = ["Base", "SessionLocal", "engine", "init_db", "get_session", "utcnow", "AsyncSession"]
+__all__ = ["Base", "SessionLocal", "engine", "init_db", "get_session", "utcnow"]

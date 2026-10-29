@@ -10,16 +10,19 @@ Telegram-бот + Mini App: каждый день новое белорусск�
 
 ```bash
 cp .env.example .env          # впишите BOT_TOKEN от @BotFather
-cd webapp && npm install && npm run build && cd ..
-cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
-.venv/bin/uvicorn app.api:app --port 8000     # API + Mini App
-.venv/bin/python -m app.bot                   # бот + планировщик (в другом терминале)
-.venv/bin/python -m pytest                    # тесты
+cd webapp && npm install && cd ..
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && cd ..
+./scripts/dev.sh                                  # API + Mini App на http://localhost:8000/?dev=1
+cd backend && .venv/bin/python -m pytest          # тесты бэкенда
+cd webapp && npm test                             # тесты фронтенда
 ```
 
-Mini App требует HTTPS: поднимите туннель (`cloudflared tunnel --url http://localhost:8000` или ngrok),
-впишите адрес в `WEBAPP_URL`, а в @BotFather → Bot Settings → Menu Button задайте тот же URL.
-Без Telegram интерфейс можно посмотреть так: `DEV_AUTH=true` и `http://localhost:8000/?dev=1`.
+`scripts/dev.sh` поднимает API и Mini App на отдельной SQLite-базе с входом по `?dev=<id>`
+(`?dev=1` — админ). Бота локально обычно не запускают: в продакшене он работает через webhook.
+Если нужно отладить бота локально: `python -m app.manage delete-webhook`, затем `python -m app.bot`
+(polling); после — снова `set-webhook`, иначе продакшен-бот перестанет получать сообщения.
+Чтобы кнопки Mini App в Telegram открывали локальную версию, нужен HTTPS-туннель на `:8000`
+и его адрес в `WEBAPP_URL`.
 
 ## Продакшен на Vercel
 

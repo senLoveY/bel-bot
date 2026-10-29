@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .analytics import build_analytics
 from .auth import require_role
 from .cards import card_to_dict
+from .config import settings
 from .db import get_session, utcnow
 from .models import Card, CardRevision, Delivery, Schedule, User
 
@@ -54,6 +55,10 @@ def validate_payload(payload: dict, create: bool) -> dict:
         raise HTTPException(422, "level must be A1, A2, B1 or B2")
     if payload.get("month_day") and not MD_RE.match(payload["month_day"]):
         raise HTTPException(422, "month_day must be MM-DD")
+    for key, value in payload.items():
+        limit = getattr(Card.__table__.c[key].type, "length", None)  # у Text длины нет
+        if limit and value is not None and len(str(value)) > limit:
+            raise HTTPException(422, f"{key} is too long: {len(str(value))} > {limit} characters")
     for key in ("kind", "be", "ru", "body", "level"):  # эти поля в базе не могут быть пустыми
         if key in payload and (payload[key] is None or not str(payload[key]).strip()):
             if key == "body":
@@ -202,14 +207,14 @@ async def propose_revision(body: RevisionIn, user: User = Depends(EDITOR), sessi
     return {"id": rev.id, "status": rev.status, "card": card_admin_dict(card)}
 
 
-async def revision_dict(session: AsyncSession, rev: CardRevision) -> dict:
-    author = await session.get(User, rev.author_id)
-    current = await session.get(Card, rev.card_id) if rev.card_id else None
+def revision_dict(rev: CardRevision, authors: dict, cards: dict) -> dict:
+    author = authors.get(rev.author_id)
+    current = cards.get(rev.card_id)
     return {
         "id": rev.id,
         "status": rev.status,
         "card_id": rev.card_id,
-        "author": author.first_name or str(author.id) if author else str(rev.author_id),
+        "author": (author.first_name or str(author.id)) if author else str(rev.author_id),
         "author_id": rev.author_id,
         "payload": json.loads(rev.payload),
         "current": card_admin_dict(current) if current else None,
@@ -229,7 +234,11 @@ async def list_revisions(
             select(CardRevision).where(CardRevision.status == status).order_by(CardRevision.id.desc()).limit(100)
         )
     ).scalars().all()
-    return [await revision_dict(session, r) for r in rows]
+    author_ids = {r.author_id for r in rows}
+    card_ids = {r.card_id for r in rows if r.card_id}
+    authors = {u.id: u for u in (await session.execute(select(User).where(User.id.in_(author_ids)))).scalars()}
+    cards = {c.id: c for c in (await session.execute(select(Card).where(Card.id.in_(card_ids)))).scalars()}
+    return [revision_dict(r, authors, cards) for r in rows]
 
 
 async def pending_revision(session: AsyncSession, rev_id: int, reviewer: User) -> CardRevision:
@@ -319,6 +328,8 @@ async def set_role(user_id: int, body: RoleIn, admin: User = Depends(ADMIN), ses
         raise HTTPException(422, "role must be user, editor or admin")
     if user_id == admin.id and body.role != "admin":
         raise HTTPException(400, "cannot remove your own admin role")
+    if user_id in settings.admin_id_set and body.role != "admin":
+        raise HTTPException(400, "this admin is set in ADMIN_IDS; change it in the environment variables")
     target = await session.get(User, user_id)
     if target is None:
         raise HTTPException(404, "user not found")

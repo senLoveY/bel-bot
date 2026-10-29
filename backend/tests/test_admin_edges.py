@@ -1,12 +1,11 @@
-from datetime import datetime
 
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import delete, select
 
 from app.api import create_app
-from app.db import SessionLocal
-from app.models import Card, CardRevision, Delivery, Schedule, User
+from app.db import SessionLocal, utcnow
+from app.models import Card, Delivery, User
 
 
 def headers(uid: int) -> dict:
@@ -120,7 +119,7 @@ async def test_list_revisions_by_status_and_reject_flow(client):
     assert any(r["id"] == rev_id for r in pending)
     assert pending[0]["author"]
 
-    assert (await client.post(f"/api/admin/revisions/99999/reject", json={}, headers=headers(49))).status_code == 404
+    assert (await client.post("/api/admin/revisions/99999/reject", json={}, headers=headers(49))).status_code == 404
     done = await client.post(f"/api/admin/revisions/{rev_id}/reject", json={"note": "нет"}, headers=headers(49))
     assert done.json()["status"] == "rejected"
     assert (await client.post(f"/api/admin/revisions/{rev_id}/reject", json={}, headers=headers(49))).status_code == 409
@@ -168,7 +167,7 @@ async def test_users_list_search_and_role_changes(client):
 async def test_stats_report_recent_errors(client):
     await make_user(client, 53, "editor")
     card_id = await card_id_of("word")
-    today = datetime.utcnow().date().isoformat()
+    today = utcnow().date().isoformat()
     async with SessionLocal() as s:
         s.add(Delivery(user_id=53, card_id=card_id, local_date=today, status="failed", error="boom"))
         await s.commit()

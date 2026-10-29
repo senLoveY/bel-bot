@@ -7,7 +7,7 @@ from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from sqlalchemy import delete, select
 
 from app.config import settings
-from app.db import SessionLocal
+from app.db import SessionLocal, utcnow
 from app.delivery import (
     RateLimiter,
     backoff,
@@ -43,7 +43,7 @@ async def test_network_error_schedules_retry_with_backoff():
     async with SessionLocal() as s:
         d = await s.get(Delivery, did)
         assert d.status == "pending" and d.attempts == 1
-        assert d.next_attempt_at > datetime.utcnow()
+        assert d.next_attempt_at > utcnow()
 
 
 async def test_network_error_gives_up_after_max_attempts():

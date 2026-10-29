@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import time
-from datetime import date, datetime, timedelta, timezone
+import time as monotonic_clock
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -17,7 +17,7 @@ from aiogram.exceptions import (
     TelegramNetworkError,
     TelegramRetryAfter,
 )
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
 from .cards import card_for_date, format_card_message
@@ -27,6 +27,7 @@ from .keyboards import card_keyboard
 from .models import Card, Delivery, User
 
 log = logging.getLogger(__name__)
+CLAIM_TIMEOUT = timedelta(minutes=5)
 
 
 class RateLimiter:
@@ -39,7 +40,7 @@ class RateLimiter:
 
     async def acquire(self) -> None:
         async with self._lock:
-            now = time.monotonic()
+            now = monotonic_clock.monotonic()
             wait = self._next - now
             if wait > 0:
                 await asyncio.sleep(wait)
@@ -47,7 +48,7 @@ class RateLimiter:
 
     def penalize(self, seconds: float) -> None:
         """После 429 притормаживаем все отправки, а не только одну."""
-        self._next = max(self._next, time.monotonic() + seconds)
+        self._next = max(self._next, monotonic_clock.monotonic() + seconds)
 
 
 def local_now(user: User, now_utc: datetime) -> datetime:
@@ -65,12 +66,16 @@ def jitter_minutes(user_id: int) -> int:
 
 
 def is_due(user: User, now_utc: datetime) -> Optional[date]:
-    """Возвращает локальную дату, если у пользователя сейчас окно отправки, иначе None."""
+    """Возвращает дату карточки, если у пользователя сейчас окно отправки, иначе None.
+
+    Момент отправки = выбранное время + личный сдвиг. Около полуночи сдвиг переносит его
+    на соседние сутки, поэтому проверяем карточки вчерашнего, сегодняшнего и завтрашнего дня."""
     local = local_now(user, now_utc)
     hh, mm = (int(x) for x in user.send_time.split(":"))
-    target = local.replace(hour=hh, minute=mm, second=0, microsecond=0) + timedelta(minutes=jitter_minutes(user.id))
-    if target <= local < target + timedelta(hours=settings.catchup_hours):
-        return local.date()
+    for day in (local.date() + timedelta(days=1), local.date(), local.date() - timedelta(days=1)):
+        target = datetime.combine(day, time(hh, mm), tzinfo=local.tzinfo) + timedelta(minutes=jitter_minutes(user.id))
+        if target <= local < target + timedelta(hours=settings.catchup_hours):
+            return day
     return None
 
 
@@ -89,9 +94,12 @@ async def enqueue_due(now_utc: Optional[datetime] = None) -> int:
 
         already = set()
         ids = list(due)
+        days = {d.isoformat() for d in due.values()}
         for i in range(0, len(ids), 500):
             rows = await session.execute(
-                select(Delivery.user_id, Delivery.local_date).where(Delivery.user_id.in_(ids[i : i + 500]))
+                select(Delivery.user_id, Delivery.local_date).where(
+                    Delivery.user_id.in_(ids[i : i + 500]), Delivery.local_date.in_(days)
+                )
             )
             already.update((uid, d) for uid, d in rows)
 
@@ -118,13 +126,35 @@ def backoff(attempts: int) -> timedelta:
     return timedelta(seconds=min(30 * 2 ** attempts, 3600))
 
 
+async def claim(session, delivery_id: int) -> bool:
+    """Занимает запись: сдвигает время следующей попытки, чтобы параллельный вызов крона её не взял.
+    Если отправка оборвётся посреди, запись снова станет доступной через CLAIM_TIMEOUT."""
+    now = utcnow()
+    result = await session.execute(
+        update(Delivery)
+        .where(Delivery.id == delivery_id, Delivery.status == "pending", Delivery.next_attempt_at <= now)
+        .values(next_attempt_at=now + CLAIM_TIMEOUT)
+    )
+    await session.commit()
+    return result.rowcount == 1
+
+
 async def send_one(bot: Bot, delivery_id: int, limiter: RateLimiter) -> None:
     async with SessionLocal() as session:
+        if not await claim(session, delivery_id):
+            return  # уже отправлена, отменена или её отправляет другой вызов
         delivery = await session.get(Delivery, delivery_id)
-        if delivery is None or delivery.status != "pending":
-            return
         user = await session.get(User, delivery.user_id)
         card = await session.get(Card, delivery.card_id)
+        if user is None or not user.is_active:
+            delivery.status = "skipped"  # пользователь нажал /stop после постановки в очередь
+            await session.commit()
+            return
+        if card is None:
+            delivery.status = "failed"
+            delivery.error = "card not found"
+            await session.commit()
+            return
 
         await limiter.acquire()
         try:
@@ -177,7 +207,10 @@ async def process_pending(bot: Bot, limiter: RateLimiter, batch: int = 500) -> i
         async with sem:
             await send_one(bot, did, limiter)
 
-    await asyncio.gather(*(guarded(i) for i in ids))
+    results = await asyncio.gather(*(guarded(i) for i in ids), return_exceptions=True)
+    for delivery_id, result in zip(ids, results):
+        if isinstance(result, Exception):
+            log.error("delivery %s failed", delivery_id, exc_info=result)
     return len(ids)
 
 

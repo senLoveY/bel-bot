@@ -4,8 +4,6 @@ import json
 import time
 from urllib.parse import urlencode
 
-from sqlalchemy import inspect, text
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app import auth
 from app.auth import (

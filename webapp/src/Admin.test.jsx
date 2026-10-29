@@ -11,6 +11,7 @@ vi.mock("./api.js", () => ({
       schedule: vi.fn(async () => []),
       users: vi.fn(async () => []),
       propose: vi.fn(async () => ({ id: 1, status: "pending" })),
+      setRole: vi.fn(),
     },
   },
 }));
@@ -143,6 +144,18 @@ describe("Admin panel", () => {
     expect(screen.getByText("—")).toBeInTheDocument(); // d30 ещё не на ком считать
     expect(screen.getByText("вада́")).toBeInTheDocument();
     expect(screen.getByText(/захавалі: 7/)).toBeInTheDocument();
+  });
+
+  it("shows why a role change was refused", async () => {
+    api.admin.users.mockResolvedValueOnce([{ id: 2, first_name: "Bob", username: null, role: "admin", is_active: true }]);
+    api.admin.setRole.mockRejectedValueOnce(
+      Object.assign(new Error("400"), { detail: "this admin is set in ADMIN_IDS; change it in the environment variables" })
+    );
+    render(<Admin me={{ id: 1, role: "admin" }} />);
+    fireEvent.click(screen.getByText("Ролі"));
+    await screen.findByText("Bob");
+    fireEvent.click(screen.getByText("user"));
+    expect(await screen.findByText(/Памылка 400: this admin is set in ADMIN_IDS/)).toBeInTheDocument();
   });
 
   it("reports a permission error without crashing", async () => {

@@ -211,8 +211,12 @@ function Cards({ isAdmin }) {
   }, [q, reload]);
 
   const togglePublished = async (card) => {
-    await api.admin.setPublished(card.id, !card.published);
-    setReload((n) => n + 1);
+    try {
+      await api.admin.setPublished(card.id, !card.published);
+      setReload((n) => n + 1);
+    } catch (e) {
+      setNotice(errText(e));
+    }
   };
 
   if (editing) {
@@ -368,7 +372,15 @@ function Schedule() {
               Захаваць
             </button>
             {card && (
-              <button className="link" onClick={() => api.admin.clearSchedule(day).then(() => setReload((n) => n + 1))}>
+              <button
+                className="link"
+                onClick={() =>
+                  api.admin
+                    .clearSchedule(day)
+                    .then(() => setReload((n) => n + 1))
+                    .catch((e) => setErr(errText(e)))
+                }
+              >
                 Скінуць
               </button>
             )}
@@ -388,14 +400,21 @@ function Users({ me }) {
     return () => clearTimeout(t);
   }, [q, reload]);
 
+  const [err, setErr] = useState("");
   const setRole = async (u, role) => {
-    await api.admin.setRole(u.id, role);
-    setReload((n) => n + 1);
+    try {
+      await api.admin.setRole(u.id, role);
+      setErr("");
+      setReload((n) => n + 1);
+    } catch (e) {
+      setErr(errText(e));
+    }
   };
 
   return (
     <>
       <input className="search" placeholder="Імя або username" value={q} onChange={(e) => setQ(e.target.value)} />
+      {err && <p className="ok">{err}</p>}
       {users.map((u) => (
         <div key={u.id} className="row-item">
           <b>{u.first_name || u.id}</b> <span className="muted">{u.username ? `@${u.username}` : ""} · {u.role}</span>
