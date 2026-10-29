@@ -9,7 +9,16 @@ async function request(path, options = {}) {
   else if (devUser) headers["X-Dev-User"] = devUser;
 
   const res = await fetch(`/api${path}`, { ...options, headers });
-  if (!res.ok) throw new Error(`${res.status}`);
+  if (!res.ok) {
+    const err = new Error(`${res.status}`);
+    try {
+      const detail = (await res.json()).detail;
+      err.detail = typeof detail === "string" ? detail : JSON.stringify(detail);
+    } catch {
+      /* тело без JSON — оставляем только код */
+    }
+    throw err;
+  }
   return res.json();
 }
 

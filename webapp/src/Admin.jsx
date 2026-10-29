@@ -12,7 +12,10 @@ const SECTIONS = [
 const EMPTY_CARD = { kind: "word", be: "", accent: "", ru: "", pos: "", example_be: "", example_ru: "", body: "", summary_be: "", body_be: "", month_day: "", level: "A1", topic: "" };
 
 function errText(e) {
-  return e?.message === "403" ? "Недастаткова правоў" : e?.message === "409" ? "Ужо разгледжана" : `Памылка ${e?.message || ""}`;
+  if (e?.message === "403") return "Недастаткова правоў";
+  if (e?.message === "409") return "Ужо разгледжана";
+  // для 422 сервер объясняет, какое поле не так
+  return `Памылка ${e?.message || ""}${e?.detail ? `: ${e.detail}` : ""}`;
 }
 
 function Stats() {
@@ -67,8 +70,9 @@ function CardEditor({ initial, cardId, isAdmin, onDone }) {
   const submit = async () => {
     // необязательные поля пустые — null, обязательные (be, ru, body, level) остаются строками
     const nullable = ["accent", "pos", "example_be", "example_ru", "summary_be", "body_be", "month_day", "topic"];
+    // отправляем только поля карточки: служебные (id, saved, published) сервер отклоняет с 422
     const payload = Object.fromEntries(
-      Object.entries(form).map(([k, v]) => [k, v === "" && nullable.includes(k) ? null : v])
+      Object.keys(EMPTY_CARD).map((k) => [k, form[k] === "" && nullable.includes(k) ? null : form[k] ?? null])
     );
     try {
       await api.admin.propose(cardId, payload);

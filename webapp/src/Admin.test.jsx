@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("./api.js", () => ({
@@ -9,6 +9,7 @@ vi.mock("./api.js", () => ({
       revisions: vi.fn(async () => []),
       schedule: vi.fn(async () => []),
       users: vi.fn(async () => []),
+      propose: vi.fn(async () => ({ id: 1, status: "pending" })),
     },
   },
 }));
@@ -72,6 +73,34 @@ describe("Admin panel", () => {
     screen.getByText("Карткі").click();
     expect(await screen.findByText(/Не атрымалася загрузіць карткі/)).toBeInTheDocument();
     expect(screen.queryByText("Нічога не знойдзена")).not.toBeInTheDocument();
+  });
+
+  it("sends only card fields when editing an existing card", async () => {
+    api.admin.cards.mockResolvedValueOnce([
+      { id: 5, kind: "word", be: "вада", accent: "вада́", ru: "вода", body: "тэкст", level: "A1", published: true, saved: null, topic: "Прырода" },
+    ]);
+    render(<Admin me={{ id: 1, role: "admin" }} />);
+    fireEvent.click(screen.getByText("Карткі"));
+    fireEvent.click(await screen.findByText("Рэдагаваць"));
+    fireEvent.click(screen.getByText("Адправіць на праверку"));
+
+    await waitFor(() => expect(api.admin.propose).toHaveBeenCalled());
+    const [cardId, payload] = api.admin.propose.mock.calls.at(-1);
+    expect(cardId).toBe(5);
+    expect(payload).not.toHaveProperty("id");
+    expect(payload).not.toHaveProperty("saved");
+    expect(payload).not.toHaveProperty("published");
+    expect(payload).toMatchObject({ kind: "word", be: "вада", ru: "вода", body: "тэкст", accent: "вада́", pos: null });
+  });
+
+  it("shows the server explanation for a 422", async () => {
+    const err = Object.assign(new Error("422"), { detail: "level must be A1, A2, B1 or B2" });
+    api.admin.propose.mockRejectedValueOnce(err);
+    render(<Admin me={{ id: 1, role: "editor" }} />);
+    fireEvent.click(screen.getByText("Карткі"));
+    fireEvent.click(await screen.findByText("+ Новая"));
+    fireEvent.click(screen.getByText("Адправіць на праверку"));
+    expect(await screen.findByText("Памылка 422: level must be A1, A2, B1 or B2")).toBeInTheDocument();
   });
 
   it("reports a permission error without crashing", async () => {

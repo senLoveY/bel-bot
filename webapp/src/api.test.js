@@ -51,6 +51,12 @@ describe("api client", () => {
     expect(fetch.mock.calls[1][0]).toBe(`/api/admin/users?q=${encodeURIComponent("Аля")}`);
   });
 
+  it("attaches the server detail to errors", async () => {
+    mockFetch({ detail: "unknown fields: ['id']" }, 422);
+    const api = await loadApi({ telegram: { initData: "x" } });
+    await expect(api.admin.propose(1, {})).rejects.toMatchObject({ message: "422", detail: "unknown fields: ['id']" });
+  });
+
   it("throws with the HTTP status on errors", async () => {
     mockFetch({}, 403);
     const api = await loadApi({ telegram: { initData: "x" } });
