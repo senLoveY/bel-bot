@@ -203,3 +203,14 @@ def test_serverless_turns_on_automatically_on_vercel(monkeypatch):
     monkeypatch.setenv("SERVERLESS", "false")
     monkeypatch.setenv("VERCEL", "1")
     assert Settings().serverless is False  # явная настройка важнее автоопределения
+
+
+async def test_setup_failure_returns_503_with_error_type_only(client, monkeypatch, caplog):
+    monkeypatch.setattr(settings, "serverless", True)
+    monkeypatch.setattr(setup, "_ready", False)
+    monkeypatch.setattr(setup, "setup_database", AsyncMock(side_effect=ConnectionError("host db.secret:5432 refused")))
+    r = await client.get("/api/today", headers={"X-Dev-User": "1"})
+    assert r.status_code == 503
+    assert r.json()["detail"] == "database setup failed: ConnectionError"
+    assert "secret" not in r.text  # строка подключения не утекает в ответ
+    assert "database setup failed" in caplog.text

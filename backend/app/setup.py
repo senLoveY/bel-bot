@@ -4,11 +4,16 @@
 поэтому подготовка выполняется при первом запросе в экземпляре (ensure_ready)."""
 from __future__ import annotations
 
+import logging
+
+from fastapi import HTTPException
+
 from .auth import sync_admin_roles
 from .cards import seed_cards
 from .config import settings
 from .db import SessionLocal, init_db
 
+log = logging.getLogger(__name__)
 _ready = False
 
 
@@ -26,5 +31,10 @@ async def ensure_ready() -> None:
     global _ready
     if _ready or not settings.serverless:
         return
-    await setup_database()
+    try:
+        await setup_database()
+    except Exception as exc:
+        # полный traceback — в логи Vercel; наружу только тип ошибки, без строки подключения и секретов
+        log.exception("database setup failed")
+        raise HTTPException(503, f"database setup failed: {type(exc).__name__}") from exc
     _ready = True
