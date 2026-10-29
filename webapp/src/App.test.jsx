@@ -49,4 +49,20 @@ describe("Mini App shell", () => {
     fireEvent.change(screen.getByDisplayValue("Руская"), { target: { value: "be" } });
     expect(await screen.findByText("Не атрымалася захаваць: unknown timezone")).toBeInTheDocument();
   });
+
+  it("lets the user pick a theme in settings", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByText("Налады"));
+    fireEvent.change(screen.getByDisplayValue("Як у Telegram"), { target: { value: "dark" } });
+    expect(document.documentElement.dataset.theme).toBe("dark");
+    expect(localStorage.getItem("zyarnyatka-theme")).toBe("dark");
+    localStorage.clear();
+  });
+
+  it("writes streak days with the right Belarusian plural", async () => {
+    const { api } = await import("./api.js");
+    api.me.mockResolvedValueOnce({ ...ME, streak: 3, longest_streak: 5 });
+    render(<App />);
+    expect(await screen.findByText(/Серыя: 3 дні/)).toBeInTheDocument();
+  });
 });

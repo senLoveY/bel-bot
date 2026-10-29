@@ -26,6 +26,7 @@ body {
   background: var(--linen);
   color: var(--ink);
   font: 17px/1.45 "Alegreya Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-variant-numeric: lining-nums; /* у Alegreya старинные цифры: 0 похож на «o», 3 уходит под строку */
 }
 h1, h2, .card-title, .brand { font-family: "Alegreya", Georgia, "Times New Roman", serif; }
 h1 { font-size: 32px; line-height: 1.1; margin: 6px 0 4px; color: var(--red-ink); }
@@ -40,7 +41,7 @@ button { font: inherit; cursor: pointer; color: inherit; }
 /* вышыванка: маска з SVG, колер бярэцца з --red */
 .motif, .band, .trim { background: var(--red); -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat; -webkit-mask-position: center; mask-position: center; }
 .motif { display: inline-block; flex: none; -webkit-mask-size: contain; mask-size: contain; }
-.band, .trim { width: 100%; -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; -webkit-mask-size: auto 100%; mask-size: auto 100%; -webkit-mask-position: left center; mask-position: left center; }
+.band, .trim { width: 100%; -webkit-mask-repeat: repeat-x; mask-repeat: repeat-x; -webkit-mask-size: auto 100%; mask-size: auto 100%; -webkit-mask-position: center; mask-position: center; } /* узор обрезается симметрично */
 .band { height: 26px; }
 .trim { height: 9px; }
 
@@ -63,7 +64,8 @@ button { font: inherit; cursor: pointer; color: inherit; }
 
 .search { width: 100%; padding: 11px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); margin-bottom: 10px; font: inherit; }
 .search::placeholder { color: var(--muted); }
-.chips { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; }
+.chips { display: flex; gap: 8px; margin-bottom: 14px; overflow-x: auto; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
 .chip { border: 1px solid var(--red); border-radius: 999px; padding: 4px 16px; background: transparent; color: var(--red-ink); white-space: nowrap; }
 .chip.on { background: var(--red); color: var(--on-red); }
 
@@ -78,6 +80,7 @@ blockquote small { display: block; color: var(--muted); margin-top: 2px; font-si
 .detail .band { margin: 18px 0 0; }
 .link { background: none; border: 0; color: var(--red-ink); padding: 8px 0; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; justify-content: center; }
+.row.actions .btn { flex: 1 1 140px; } /* две кнопки одной ширины, на узком экране — одна под другой */
 .btn { display: inline-block; background: var(--red); color: var(--on-red); border: 1px solid var(--red); border-radius: 999px; padding: 10px 22px; font-weight: 500; text-decoration: none; }
 .btn.secondary { background: transparent; color: var(--red-ink); }
 
@@ -105,6 +108,7 @@ blockquote small { display: block; color: var(--muted); margin-top: 2px; font-si
 .bar { display: block; height: 100%; background: var(--red); border-radius: 999px; min-width: 2px; }
 
 /* ніжняя панэль */
+:root.typing .tabs { display: none; }
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--linen); padding-bottom: env(safe-area-inset-bottom); }
 .tabs-row { display: flex; }
 .tabs button { flex: 1; padding: 11px 0 13px; background: none; border: 0; color: var(--muted); font-weight: 500; }

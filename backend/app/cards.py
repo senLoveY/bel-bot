@@ -94,10 +94,12 @@ def card_to_dict(card: Card, saved_status: Optional[str] = None) -> dict:
 
 
 def explanation(card: Card, lang: str = "ru") -> str:
-    """Краткое пояснение на выбранном языке; если белорусского нет, показываем русское."""
-    if lang == "be" and card.summary_be:
-        return card.summary_be
-    return card.ru
+    """Краткое пояснение на выбранном языке; если белорусского нет, показываем русское.
+    У слов пояснение словарное (со строчной), у фактов и праздников — предложение с заглавной."""
+    text = card.summary_be if lang == "be" and card.summary_be else card.ru
+    if card.kind != "word" and text:
+        text = text[0].upper() + text[1:]
+    return text
 
 
 def format_card_message(card: Card, lang: str = "ru") -> str:

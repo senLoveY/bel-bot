@@ -72,7 +72,7 @@ function Analytics() {
         <Stat label="Адкрыццяў карткі" value={a.week.opens} />
         <Stat label="Хто адкрываў" value={a.week.openers} />
         <Stat label="Атрымалі рассылку" value={a.week.recipients} />
-        <Stat label="Адкрылі з атрымаўшых" value={pct(a.week.open_rate)} />
+        <Stat label="Адкрылі з тых, хто атрымаў" value={pct(a.week.open_rate)} />
       </div>
       <h2>Утрыманне</h2>
       <div className="stat-grid">
@@ -151,13 +151,13 @@ function CardEditor({ initial, cardId, isAdmin, onDone }) {
       {[
         ["be", "Тэкст па-беларуску"],
         ["accent", "З націскам"],
-        ["ru", "Пераклад / кароткае пояснение (руск.)"],
-        ["summary_be", "Кароткае пояснение (бел.)"],
+        ["ru", "Пераклад / кароткае тлумачэнне (руск.)"],
+        ["summary_be", "Кароткае тлумачэнне (бел.)"],
         ["pos", "Часціна мовы"],
         ["example_be", "Прыклад (бел.)"],
         ["example_ru", "Прыклад (руск.)"],
-        ["body", "Тэкст для падрабязнасцей (руск.)"],
-        ["body_be", "Тэкст для падрабязнасцей (бел.)"],
+        ["body", "Падрабязны тэкст (руск.)"],
+        ["body_be", "Падрабязны тэкст (бел.)"],
         ["month_day", "Дата MM-DD (для свят)"],
         ["topic", "Тэма"],
       ].map(([k, label]) => (
@@ -223,7 +223,7 @@ function Cards({ isAdmin }) {
     return (
       <>
         <button className="link" onClick={() => setEditing(null)}>
-          ← К спісу
+          ← Да спісу
         </button>
         <h2>{editing.card ? `Рэдагаванне: ${editing.card.be}` : "Новая картка"}</h2>
         <CardEditor
@@ -358,7 +358,7 @@ function Schedule() {
       <p className="muted">Калі дзень не запоўнены, паказваецца звычайная ратацыя і святы.</p>
       {days.map(({ day, card }) => (
         <div key={day} className="row-item">
-          <b>{day}</b> {card ? <span>— {card.accent || card.be}</span> : <span className="muted">— авто</span>}
+          <b>{day}</b> {card ? <span>— {card.accent || card.be}</span> : <span className="muted">— аўтаматычна</span>}
           <div className="row">
             <select value={pick[day] || ""} onChange={(e) => setPick({ ...pick, [day]: e.target.value })}>
               <option value="">— выбраць —</option>
@@ -413,7 +413,7 @@ function Users({ me }) {
 
   return (
     <>
-      <input className="search" placeholder="Імя або username" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className="search" placeholder="Імя або нік" value={q} onChange={(e) => setQ(e.target.value)} />
       {err && <p className="ok">{err}</p>}
       {users.map((u) => (
         <div key={u.id} className="row-item">
@@ -446,7 +446,15 @@ export default function Admin({ me }) {
       <h2>Адмін-панэль</h2>
       <div className="chips">
         {sections.map(([id, label]) => (
-          <button key={id} className={`chip ${section === id ? "on" : ""}`} onClick={() => setSection(id)}>
+          <button
+            key={id}
+            className={`chip ${section === id ? "on" : ""}`}
+            onClick={(e) => {
+              setSection(id);
+              // выбранный раздел не должен оставаться обрезанным у края экрана
+              e.currentTarget.scrollIntoView?.({ inline: "nearest", block: "nearest", behavior: "smooth" });
+            }}
+          >
             {label}
           </button>
         ))}

@@ -2,7 +2,11 @@ import { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 import Admin from "./Admin.jsx";
 import { api } from "./api.js";
+import { applyTheme, followSystemTheme, savedTheme } from "./theme.js";
 import "./styles.css";
+
+applyTheme(savedTheme()); // сайт админки тоже следует теме устройства
+followSystemTheme();
 
 // Имя бота без @: вход идёт через него, на сайте данные не вводятся
 const BOT_USERNAME = "belmov_bot";
@@ -34,7 +38,7 @@ function WebAdmin() {
             Увайсці праз бота
           </a>
         </p>
-        <p className="muted center">Пасля націску бот пришле спасылку; яна дзейнічае 2 хвіліны і толькі адзін раз.</p>
+        <p className="muted center">Пасля націску бот дашле спасылку; яна дзейнічае 2 хвіліны і толькі адзін раз.</p>
       </>
     );
   } else if (me.role !== "editor" && me.role !== "admin") {

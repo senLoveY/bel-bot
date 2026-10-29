@@ -24,3 +24,12 @@ async def test_message_escapes_html():
         card = await card_for_date(s, date(2026, 3, 10))
         card.ru = "<b>x</b>"
         assert "&lt;b&gt;x&lt;/b&gt;" in format_card_message(card)
+
+
+def test_fact_and_holiday_explanations_start_with_capital():
+    from app.models import Card
+
+    fact = Card(kind="fact", be="Літара Ў", ru="Буква…", summary_be="літара «ў» — нескладовае «у»")
+    assert "\nЛітара «ў» — нескладовае «у»" in format_card_message(fact, "be")
+    word = Card(kind="word", be="вада", accent="вада́", ru="вода", summary_be="вадкасць")
+    assert "— вадкасць" in format_card_message(word, "be")  # у слова — словарное пояснение со строчной

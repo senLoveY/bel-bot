@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, tg } from "./api.js";
 import { KIND_MOTIF, maskStyle } from "./ornament.js";
 import Admin from "./Admin.jsx";
-import { pick, pickBody } from "./lang.js";
+import { daysText, pick, pickBody } from "./lang.js";
+import { THEMES, savedTheme, setTheme } from "./theme.js";
 
 const KINDS = { word: "Словы", holiday: "Святы", fact: "Факты" };
 
@@ -89,9 +90,11 @@ function Detail({ card, lang, onClose, onChange }) {
 
   return (
     <div className="detail">
-      <button className="link" onClick={onClose}>
-        ← Назад
-      </button>
+      {!tg?.initData && (
+        <button className="link" onClick={onClose}>
+          ← Назад
+        </button>
+      )}
       <div className="detail-hero">
         <Motif name={KIND_MOTIF[card.kind]} size={84} />
       </div>
@@ -110,7 +113,7 @@ function Detail({ card, lang, onClose, onChange }) {
         </blockquote>
       )}
       <p>{pickBody(card, lang)}</p>
-      <div className="row">
+      <div className="row actions">
         <button className="btn" onClick={() => set(card.saved === "saved" ? null : "saved")}>
           {card.saved === "saved" ? "★ У захаваных" : "☆ Захаваць"}
         </button>
@@ -199,7 +202,7 @@ function Saved({ onOpen, refreshKey, me, lang }) {
         Захавана: {cards.length} · вывучана: {learned}
       </p>
       <p className="muted">
-        Серыя: {me.streak} дн. · найдаўжэйшая: {me.longest_streak} дн.
+        Серыя: {daysText(me.streak)} · найдаўжэйшая: {daysText(me.longest_streak)}
       </p>
       {cards.map((c) => (
         <Card key={c.id} card={c} lang={lang} onOpen={onOpen} />
@@ -213,6 +216,7 @@ function Settings({ me, setMe }) {
   const [time, setTime] = useState(me.send_time);
   const [saved, setSaved] = useState(false);
   const [err, setErr] = useState("");
+  const [theme, setThemeChoice] = useState(savedTheme());
 
   const update = async (patch) => {
     try {
@@ -235,10 +239,26 @@ function Settings({ me, setMe }) {
         <input type="time" value={time} onChange={(e) => setTime(e.target.value)} onBlur={() => time !== me.send_time && update({ send_time: time })} />
       </label>
       <label className="field">
-        Мова пояснянняў
+        Мова тлумачэнняў
         <select value={me.explain_lang} onChange={(e) => update({ explain_lang: e.target.value })}>
           <option value="ru">Руская</option>
           <option value="be">Беларуская</option>
+        </select>
+      </label>
+      <label className="field">
+        Тэма
+        <select
+          value={theme}
+          onChange={(e) => {
+            setThemeChoice(e.target.value);
+            setTheme(e.target.value);
+          }}
+        >
+          {THEMES.map(([id, label]) => (
+            <option key={id} value={id}>
+              {label}
+            </option>
+          ))}
         </select>
       </label>
       <label className="field">
@@ -298,7 +318,7 @@ export default function App() {
       <header className="header">
         <div className="brand">Зярнятка</div>
         <p className="brand-sub">
-          {me.streak > 0 && <>Серыя: {me.streak} дн. · </>}слова, святы і факты
+          {me.streak > 0 && <>Серыя: {daysText(me.streak)} · </>}слова, святы і факты
         </p>
         <Band />
       </header>
