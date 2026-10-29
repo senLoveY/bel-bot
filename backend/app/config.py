@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT_ENV = Path(__file__).resolve().parents[2] / ".env"  # .env лежит в корне проекта
@@ -29,7 +31,8 @@ class Settings(BaseSettings):
     admin_ids: str = ""
 
     # serverless (Vercel): бот через webhook, рассылка по внешнему крону
-    serverless: bool = False  # без пула соединений, подготовка базы при первом запросе
+    # без пула соединений, подготовка базы при первом запросе; на Vercel (есть VERCEL=1) включается сам
+    serverless: bool = Field(default_factory=lambda: bool(os.environ.get("VERCEL")))
     webhook_secret: str = ""  # Telegram присылает его в X-Telegram-Bot-Api-Secret-Token
     cron_secret: str = ""  # крон передаёт его в Authorization: Bearer ...
     cron_batch: int = 100  # сколько сообщений отправлять за один вызов крона

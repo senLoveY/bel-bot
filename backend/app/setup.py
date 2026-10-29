@@ -13,6 +13,9 @@ _ready = False
 
 
 async def setup_database() -> None:
+    if settings.serverless and settings.database_url.startswith("sqlite"):
+        # на Vercel файловая система только для чтения: локальная SQLite невозможна
+        raise RuntimeError("DATABASE_URL is not set: in serverless mode use Postgres (Supabase), not SQLite")
     await init_db()
     async with SessionLocal() as session:
         await seed_cards(session)

@@ -172,3 +172,34 @@ def test_vercel_entrypoint_exposes_fastapi_app():
     app = runpy.run_path(str(entry))["app"]
     assert app.title == "Belarusian Daily"
     assert any(getattr(r, "path", "") == "/api/telegram/webhook" for r in app.routes)
+
+
+async def test_setup_refuses_sqlite_in_serverless(monkeypatch):
+    monkeypatch.setattr(settings, "serverless", True)
+    monkeypatch.setattr(settings, "database_url", "sqlite+aiosqlite:///./data/app.db")
+    with pytest.raises(RuntimeError, match="DATABASE_URL is not set"):
+        await setup.setup_database()
+
+
+async def test_serverless_app_starts_without_touching_the_database(monkeypatch):
+    """На Vercel lifespan не должен готовить базу: иначе ошибка конфигурации роняет функцию целиком."""
+    monkeypatch.setattr(settings, "serverless", True)
+    called = AsyncMock()
+    monkeypatch.setattr(setup, "setup_database", called)
+    app = create_app()
+    async with app.router.lifespan_context(app):
+        pass
+    assert called.await_count == 0
+
+
+def test_serverless_turns_on_automatically_on_vercel(monkeypatch):
+    from app.config import Settings
+
+    monkeypatch.delenv("SERVERLESS", raising=False)
+    monkeypatch.setenv("VERCEL", "1")
+    assert Settings().serverless is True
+    monkeypatch.delenv("VERCEL")
+    assert Settings().serverless is False
+    monkeypatch.setenv("SERVERLESS", "false")
+    monkeypatch.setenv("VERCEL", "1")
+    assert Settings().serverless is False  # явная настройка важнее автоопределения
