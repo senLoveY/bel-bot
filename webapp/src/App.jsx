@@ -90,11 +90,11 @@ function Detail({ card, lang, onClose, onChange }) {
 
   return (
     <div className="detail">
-      {!tg?.initData && (
-        <button className="link" onClick={onClose}>
-          ← Назад
+      <div className="back-bar">
+        <button className="back-btn" onClick={onClose}>
+          <span aria-hidden="true">←</span> Назад
         </button>
-      )}
+      </div>
       <div className="detail-hero">
         <Motif name={KIND_MOTIF[card.kind]} size={84} />
       </div>
@@ -118,7 +118,7 @@ function Detail({ card, lang, onClose, onChange }) {
           {card.saved === "saved" ? "★ У захаваных" : "☆ Захаваць"}
         </button>
         <button className="btn secondary" onClick={() => set(card.saved === "learned" ? null : "learned")}>
-          {card.saved === "learned" ? "✓ Вывучана" : "Адзначыць вывучаным"}
+          {card.saved === "learned" ? "✓ Вывучана" : "✓ Ужо ведаю"}
         </button>
       </div>
       {err && <p className="ok">{err}</p>}

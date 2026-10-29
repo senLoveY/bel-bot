@@ -65,4 +65,12 @@ describe("Mini App shell", () => {
     render(<App />);
     expect(await screen.findByText(/Серыя: 3 дні/)).toBeInTheDocument();
   });
+
+  it("card screen has a visible back button that returns to today", async () => {
+    render(<App />);
+    fireEvent.click(await screen.findByText("прывітанне"));
+    const back = await screen.findByRole("button", { name: /Назад/ });
+    fireEvent.click(back);
+    expect(await screen.findByText("Картка дня")).toBeInTheDocument();
+  });
 });

@@ -71,7 +71,6 @@ button { font: inherit; cursor: pointer; color: inherit; }
 
 /* падрабязна */
 .detail { text-align: center; }
-.detail .link { display: block; text-align: left; }
 .detail-hero { display: flex; justify-content: center; margin: 4px 0 8px; }
 .lead { font-size: 20px; margin: 0 0 6px; }
 .detail p { text-align: left; }
@@ -80,7 +79,13 @@ blockquote small { display: block; color: var(--muted); margin-top: 2px; font-si
 .detail .band { margin: 18px 0 0; }
 .link { background: none; border: 0; color: var(--red-ink); padding: 8px 0; }
 .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 16px; align-items: center; justify-content: center; }
-.row.actions .btn { flex: 1 1 140px; } /* две кнопки одной ширины, на узком экране — одна под другой */
+/* две кнопки одной ширины и высоты (даже если текст одной переносится); на узком экране — одна под другой */
+.row.actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); align-items: stretch; }
+.row.actions .btn { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 48px; }
+
+/* кнопка «Назад» на экране карточки: заметная и остаётся сверху при прокрутке длинного текста */
+.back-bar { position: sticky; top: 8px; z-index: 5; text-align: left; margin: 0 0 6px; }
+.back-btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px 8px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); color: var(--red-ink); font-weight: 500; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
 .btn { display: inline-block; background: var(--red); color: var(--on-red); border: 1px solid var(--red); border-radius: 999px; padding: 10px 22px; font-weight: 500; text-decoration: none; }
 .btn.secondary { background: transparent; color: var(--red-ink); }
 
