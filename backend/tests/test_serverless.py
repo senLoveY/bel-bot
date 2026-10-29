@@ -168,5 +168,7 @@ def test_manage_rejects_unknown_command():
 
 
 def test_vercel_entrypoint_exposes_fastapi_app():
-    entry = Path(__file__).resolve().parents[2] / "api" / "index.py"
-    assert runpy.run_path(str(entry))["app"].title == "Belarusian Daily"
+    entry = Path(__file__).resolve().parents[1] / "main.py"  # entrypoint сервиса backend в vercel.json
+    app = runpy.run_path(str(entry))["app"]
+    assert app.title == "Belarusian Daily"
+    assert any(getattr(r, "path", "") == "/api/telegram/webhook" for r in app.routes)

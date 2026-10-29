@@ -1,17 +1,18 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null,
-  "installCommand": "cd webapp && npm ci",
-  "buildCommand": "cd webapp && npm run build",
-  "outputDirectory": "webapp/dist",
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "backend/app/**",
-      "maxDuration": 30
+  "services": {
+    "backend": {
+      "root": "backend",
+      "framework": "fastapi",
+      "entrypoint": "main.py"
+    },
+    "webapp": {
+      "root": "webapp",
+      "framework": "vite"
     }
   },
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "/api/index" },
-    { "source": "/admin", "destination": "/admin.html" }
+    { "source": "/api/(.*)", "destination": { "service": "backend" } },
+    { "source": "/(.*)", "destination": { "service": "webapp" } }
   ]
 }

@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // две страницы: Mini App (index.html) и сайт админки (admin.html)
+      // две страницы: Mini App (index.html) и сайт админки (admin/index.html → /admin)
       input: {
         main: new URL("./index.html", import.meta.url).pathname,
-        admin: new URL("./admin.html", import.meta.url).pathname,
+        admin: new URL("./admin/index.html", import.meta.url).pathname,
       },
     },
   },

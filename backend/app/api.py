@@ -241,7 +241,7 @@ def create_app() -> FastAPI:
     dist = Path(__file__).resolve().parents[2] / "webapp" / "dist"
     if dist.is_dir():
         # сайт админки должен быть объявлен до общего маршрута статики
-        app.add_api_route("/admin", lambda: FileResponse(dist / "admin.html"), include_in_schema=False)
+        app.add_api_route("/admin", lambda: FileResponse(dist / "admin" / "index.html"), include_in_schema=False)
         app.mount("/", StaticFiles(directory=dist, html=True), name="webapp")
     return app
 

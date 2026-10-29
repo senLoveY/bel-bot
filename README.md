@@ -29,20 +29,26 @@ docker compose up --build
 
 ## Продакшен на Vercel
 
-Mini App и сайт админки — статика из `webapp/dist`, API — serverless-функция `api/index.py`
-(FastAPI из `backend/app`). Бот работает через webhook, рассылку запускает внешний крон.
+Один проект Vercel с двумя сервисами (`vercel.json`):
 
-1. **Vercel → Add New Project →** импорт репозитория, корень проекта — корень репозитория
-   (настройки сборки берутся из `vercel.json`).
-2. **Environment Variables:**
+| Сервис | Папка | Что это | Публичный путь |
+|---|---|---|---|
+| `backend` | `backend/` | FastAPI (`main.py`), все маршруты под `/api` | `/api/*` |
+| `webapp` | `webapp/` | Vite: Mini App (`/`) и сайт админки (`/admin`) | всё остальное |
+
+Сервисы не вызывают друг друга напрямую: браузер ходит на `/api/...` того же домена, поэтому bindings не нужны.
+
+1. **Vercel → Add New Project →** импорт репозитория, корень — корень репозитория.
+2. **Environment Variables** (для сервиса `backend`):
    `BOT_TOKEN`, `DATABASE_URL` (Supabase Session pooler, префикс `postgresql+asyncpg://`),
-   `WEBAPP_URL` (адрес проекта, например `https://zyarnyatka.vercel.app`), `ADMIN_IDS`,
+   `WEBAPP_URL` (публичный адрес проекта, например `https://zyarnyatka.vercel.app`), `ADMIN_IDS`,
    `SERVERLESS=true`, `WEBHOOK_SECRET`, `CRON_SECRET`.
 3. После деплоя направить Telegram на webhook (из `backend/`, с теми же `WEBAPP_URL` и `WEBHOOK_SECRET`):
    `python -m app.manage set-webhook`, проверка — `python -m app.manage webhook-info`.
 4. **Крон:** раз в 5 минут `POST {WEBAPP_URL}/api/cron/tick` с заголовком
    `Authorization: Bearer <CRON_SECRET>` (например, cron-job.org). Вручную — workflow «Broadcast tick».
 
+Локально оба сервиса вместе: `vercel dev`. Без Vercel CLI: `./scripts/dev.sh`.
 Локальный бот работает через polling: перед запуском `python -m app.manage delete-webhook`,
 после — снова `set-webhook`, иначе продакшен-бот перестанет получать сообщения.
 
