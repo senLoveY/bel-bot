@@ -64,14 +64,47 @@ async def test_editor_proposes_admin_approves(client):
 
 
 async def test_author_cannot_approve_own_revision(client):
-    await make_user(client, 13, "admin")
+    # правка, отправленная редактором, который потом стал админом, всё равно ждёт другого админа
+    await make_user(client, 13, "editor")
     rev = await client.post(
         "/api/admin/revisions",
         json={"payload": {"kind": "fact", "be": "Факт", "ru": "Текст факта"}},
         headers=headers(13),
     )
-    assert rev.status_code == 201
+    assert rev.json()["status"] == "pending"
+    await make_user(client, 13, "admin")
     assert (await client.post(f"/api/admin/revisions/{rev.json()['id']}/approve", headers=headers(13))).status_code == 403
+
+
+async def test_admin_edit_is_applied_immediately(client):
+    await make_user(client, 21, "admin")
+    card_id = await first_word_id()
+    r = await client.post(
+        "/api/admin/revisions",
+        json={"card_id": card_id, "payload": {"kind": "word", "be": "прывітанне", "ru": "здравствуйте"}},
+        headers=headers(21),
+    )
+    assert r.status_code == 201
+    assert r.json()["status"] == "approved"
+    assert r.json()["card"]["ru"] == "здравствуйте"
+    async with SessionLocal() as s:
+        assert (await s.get(Card, card_id)).ru == "здравствуйте"
+        rev = await s.get(CardRevision, r.json()["id"])
+        assert rev.reviewer_id == 21 and rev.reviewed_at is not None  # история правок сохраняется
+
+    pending = (await client.get("/api/admin/revisions?status=pending", headers=headers(21))).json()
+    assert all(p["id"] != r.json()["id"] for p in pending)
+
+
+async def test_admin_new_card_is_created_and_published_immediately(client):
+    await make_user(client, 22, "admin")
+    r = await client.post(
+        "/api/admin/revisions", json={"payload": {"kind": "fact", "be": "Новы факт", "ru": "Описание"}}, headers=headers(22)
+    )
+    card = r.json()["card"]
+    assert card["published"] is True
+    listed = (await client.get("/api/cards?kind=fact&limit=200", headers=headers(77))).json()
+    assert any(c["id"] == card["id"] for c in listed)
 
 
 async def test_reject_keeps_card_unchanged(client):

@@ -99,6 +99,11 @@ blockquote small { display: block; color: var(--muted); margin-top: 2px; font-si
 .editor .field { margin-bottom: 12px; }
 .row .search { flex: 1; }
 
+.bars { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+.bar-row { display: grid; grid-template-columns: 44px 1fr 28px; gap: 8px; align-items: center; font-size: 14px; }
+.bar-track { background: var(--paper); border: 1px solid var(--line); border-radius: 999px; height: 12px; overflow: hidden; }
+.bar { display: block; height: 100%; background: var(--red); border-radius: 999px; min-width: 2px; }
+
 /* ніжняя панэль */
 .tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--linen); padding-bottom: env(safe-area-inset-bottom); }
 .tabs-row { display: flex; }

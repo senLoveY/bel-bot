@@ -21,12 +21,6 @@ Mini App требует HTTPS: поднимите туннель (`cloudflared t
 впишите адрес в `WEBAPP_URL`, а в @BotFather → Bot Settings → Menu Button задайте тот же URL.
 Без Telegram интерфейс можно посмотреть так: `DEV_AUTH=true` и `http://localhost:8000/?dev=1`.
 
-## Docker (Postgres)
-
-```bash
-docker compose up --build
-```
-
 ## Продакшен на Vercel
 
 Один проект Vercel с двумя сервисами (`vercel.json`):
@@ -43,14 +37,23 @@ docker compose up --build
    `BOT_TOKEN`, `DATABASE_URL` (Supabase Session pooler, префикс `postgresql+asyncpg://`),
    `WEBAPP_URL` (публичный адрес проекта, например `https://zyarnyatka.vercel.app`), `ADMIN_IDS`,
    `SERVERLESS=true`, `WEBHOOK_SECRET`, `CRON_SECRET`.
-3. После деплоя направить Telegram на webhook (из `backend/`, с теми же `WEBAPP_URL` и `WEBHOOK_SECRET`):
-   `python -m app.manage set-webhook`, проверка — `python -m app.manage webhook-info`.
+3. После деплоя направить Telegram на webhook и задать меню команд (из `backend/`, с теми же
+   `WEBAPP_URL`, `WEBHOOK_SECRET`, `ADMIN_IDS`): `python -m app.manage set-webhook`,
+   `python -m app.manage set-commands`; проверка — `python -m app.manage webhook-info`.
+   Диагностика без секретов: `GET /api/health`.
 4. **Крон:** раз в 5 минут `POST {WEBAPP_URL}/api/cron/tick` с заголовком
    `Authorization: Bearer <CRON_SECRET>` (например, cron-job.org). Вручную — workflow «Broadcast tick».
 
 Локально оба сервиса вместе: `vercel dev`. Без Vercel CLI: `./scripts/dev.sh`.
 Локальный бот работает через polling: перед запуском `python -m app.manage delete-webhook`,
 после — снова `set-webhook`, иначе продакшен-бот перестанет получать сообщения.
+
+## Миграции базы (Alembic)
+
+Схема описана в `backend/app/models.py`, миграции — в `backend/migrations/versions/`.
+Приложение применяет их само при старте (на Vercel — при первом запросе). Новая миграция после
+изменения моделей: из `backend/` выполнить `alembic revision --autogenerate -m "что изменилось"`
+и проверить файл. Тест `test_migrations_match_models` падает, если модели и миграции разошлись.
 
 ## Как работает рассылка
 

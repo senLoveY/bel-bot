@@ -5,7 +5,7 @@ import hmac
 import json
 import secrets
 import time
-from typing import Optional
+from typing import Optional, Tuple
 from urllib.parse import parse_qsl
 
 from fastapi import Cookie, Depends, Header, HTTPException
@@ -46,22 +46,6 @@ SESSION_TTL = 12 * 3600
 SESSION_COOKIE = "admin_session"
 
 
-def validate_login_widget(data: dict, bot_token: str, max_age: int = MAX_AUTH_AGE_SEC) -> bool:
-    """Проверка данных Telegram Login Widget: ключ = SHA256(токен бота), подпись = HMAC по полям."""
-    received = data.get("hash")
-    if not received or not bot_token:
-        return False
-    check_string = "\n".join(f"{k}={data[k]}" for k in sorted(k for k in data if k != "hash"))
-    secret = hashlib.sha256(bot_token.encode()).digest()
-    expected = hmac.new(secret, check_string.encode(), hashlib.sha256).hexdigest()
-    if not hmac.compare_digest(expected, str(received)):
-        return False
-    try:
-        return time.time() - int(data.get("auth_date", 0)) <= max_age
-    except (TypeError, ValueError):
-        return False
-
-
 def _session_key() -> bytes:
     return hashlib.sha256(("web-session|" + settings.bot_token).encode()).digest()
 
@@ -84,8 +68,7 @@ def read_session_token(token: str) -> Optional[int]:
         return None
 
 
-LOGIN_TTL = 120  # ссылка из бота живёт 2 минуты и работает один раз
-_used_login_nonces: set = set()
+LOGIN_TTL = 120  # ссылка из бота живёт 2 минуты и работает один раз (использованные nonce хранятся в базе)
 
 
 def _login_key() -> bytes:
@@ -98,17 +81,15 @@ def make_login_token(user_id: int) -> str:
     return f"{body}.{sig}"
 
 
-def read_login_token(token: str) -> Optional[int]:
+def verify_login_token(token: str) -> Optional[Tuple[int, str]]:
+    """Проверяет подпись и срок ссылки. Возвращает (user_id, nonce); повторное использование ловит база."""
     try:
         user_id, exp, nonce, sig = token.split(".")
         body = f"{user_id}.{exp}.{nonce}"
         expected = hmac.new(_login_key(), body.encode(), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected, sig) or int(exp) < time.time():
             return None
-        if nonce in _used_login_nonces:
-            return None
-        _used_login_nonces.add(nonce)
-        return int(user_id)
+        return int(user_id), nonce
     except ValueError:
         return None
 

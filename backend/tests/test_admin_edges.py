@@ -179,8 +179,9 @@ async def test_stats_report_recent_errors(client):
 
 
 async def test_review_own_revision_blocked_for_admin_too(client):
-    await make_user(client, 54, "admin")
+    await make_user(client, 54, "editor")
     rev = await client.post(
         "/api/admin/revisions", json={"payload": {"kind": "fact", "be": "A", "ru": "B"}}, headers=headers(54)
     )
+    await make_user(client, 54, "admin")
     assert (await client.post(f"/api/admin/revisions/{rev.json()['id']}/reject", json={}, headers=headers(54))).status_code == 403

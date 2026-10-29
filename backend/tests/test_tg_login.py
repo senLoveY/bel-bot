@@ -1,3 +1,5 @@
+import time
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -8,7 +10,7 @@ from sqlalchemy import select
 from app import auth, bot
 from app.api import create_app
 from app.db import SessionLocal
-from app.models import User
+from app.models import UsedLoginToken, User
 
 
 def headers(uid: int) -> dict:
@@ -69,6 +71,41 @@ async def test_tampered_link_rejected(client):
     assert (await client.get(f"/api/web/tg-login?token={forged}", follow_redirects=False)).status_code == 401
 
 
+async def test_used_link_is_remembered_in_the_database(client):
+    """На Vercel запросы идут в разные экземпляры: одноразовость должна держаться на базе, не на памяти."""
+    await set_role(66, "admin")
+    token = auth.make_login_token(66)
+    assert (await client.get(f"/api/web/tg-login?token={token}", follow_redirects=False)).status_code == 303
+    async with SessionLocal() as s:
+        assert await s.get(UsedLoginToken, token.split(".")[2]) is not None
+    # «другой экземпляр»: новое приложение, общая только база
+    async with AsyncClient(transport=ASGITransport(app=create_app()), base_url="http://t") as other:
+        assert (await other.get(f"/api/web/tg-login?token={token}", follow_redirects=False)).status_code == 401
+
+
+async def test_old_used_tokens_are_cleaned_up(client):
+    await set_role(67, "admin")
+    async with SessionLocal() as s:
+        s.add(UsedLoginToken(nonce="old", used_at=datetime.utcnow() - timedelta(days=3)))
+        await s.commit()
+    await client.get(f"/api/web/tg-login?token={auth.make_login_token(67)}", follow_redirects=False)
+    async with SessionLocal() as s:
+        assert await s.get(UsedLoginToken, "old") is None
+
+
+async def test_editor_session_cannot_manage_roles(client):
+    await set_role(68, "editor")
+    r = await client.get(f"/api/web/tg-login?token={auth.make_login_token(68)}", follow_redirects=False)
+    cookie = {"Cookie": f"admin_session={r.cookies['admin_session']}"}
+    assert (await client.get("/api/admin/stats", headers=cookie)).status_code == 200
+    assert (await client.get("/api/admin/users", headers=cookie)).status_code == 403
+
+
+async def test_tampered_session_cookie_rejected(client):
+    forged = f"69.{int(time.time()) + 999}.deadbeef"
+    assert (await client.get("/api/admin/stats", headers={"Cookie": f"admin_session={forged}"})).status_code == 401
+
+
 async def test_plain_user_link_is_forbidden(client):
     await set_role(65, "user")
     token = auth.make_login_token(65)
@@ -107,7 +144,7 @@ async def test_admin_command_sends_one_time_link_to_editor():
     kwargs = msg.answer.await_args.kwargs
     url = kwargs["reply_markup"].inline_keyboard[0][0].url
     assert "/api/web/tg-login?token=" in url
-    assert auth.read_login_token(token_from(url)) == 71
+    assert auth.verify_login_token(token_from(url))[0] == 71
 
 
 async def test_start_with_admin_payload_sends_login_link():

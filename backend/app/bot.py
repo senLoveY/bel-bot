@@ -10,6 +10,7 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.exc import IntegrityError
 
+from .analytics import record_event
 from .cards import card_for_date, format_card_message, seed_cards
 from .clock import user_today
 from .config import settings
@@ -122,6 +123,7 @@ async def on_card_button(call: CallbackQuery) -> None:
             session.add(SavedCard(user_id=call.from_user.id, card_id=card_id, status=status))
         else:
             row.status = status
+        record_event(session, call.from_user.id, "learn" if status == "learned" else "save", card_id)
         await session.commit()
     await call.answer("Захавана ⭐" if status == "saved" else "Малайчына! ✅")
 

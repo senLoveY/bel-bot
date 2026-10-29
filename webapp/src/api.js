@@ -33,6 +33,7 @@ export const api = {
   settings: (patch) => request("/me/settings", { method: "PUT", body: JSON.stringify(patch) }),
   admin: {
     stats: () => request("/admin/stats"),
+    analytics: () => request("/admin/analytics"),
     cards: (params = {}) => request(`/admin/cards?${new URLSearchParams(params)}`),
     setPublished: (id, published) =>
       request(`/admin/cards/${id}/published`, { method: "PUT", body: JSON.stringify({ published }) }),

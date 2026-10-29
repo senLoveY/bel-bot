@@ -33,6 +33,7 @@ class FakeBot:
     def __init__(self):
         self.set_webhook = AsyncMock()
         self.delete_webhook = AsyncMock()
+        self.set_my_commands = AsyncMock()
         self.get_webhook_info = AsyncMock(
             return_value=MagicMock(url="https://x/api/telegram/webhook", pending_update_count=0, last_error_message="boom")
         )
@@ -231,3 +232,15 @@ async def test_health_reports_config_without_secrets(client, monkeypatch):
     assert body["env_set"]["BOT_TOKEN"] is True and body["env_set"]["DATABASE_URL"] is False
     assert body["database_driver"].startswith("sqlite")
     assert "123456" not in r.text  # значение токена не попадает в ответ
+
+
+async def test_set_commands_adds_admin_command_only_for_admins(monkeypatch, capsys):
+    bot = FakeBot()
+    monkeypatch.setattr(manage, "make_bot", lambda: bot)
+    monkeypatch.setattr(settings, "admin_ids", "874180496")
+    await manage.set_commands()
+    default_call, admin_call = bot.set_my_commands.await_args_list
+    assert [c.command for c in default_call.args[0]] == ["start", "word", "settings", "stop"]
+    assert "admin" in [c.command for c in admin_call.args[0]]
+    assert admin_call.kwargs["scope"].chat_id == 874180496
+    assert "commands set" in capsys.readouterr().out

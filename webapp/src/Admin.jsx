@@ -3,6 +3,7 @@ import { api } from "./api.js";
 
 const SECTIONS = [
   ["stats", "Маніторынг"],
+  ["analytics", "Аналітыка"],
   ["cards", "Карткі"],
   ["queue", "Чарга"],
   ["schedule", "Расклад"],
@@ -53,6 +54,59 @@ function Stats() {
   );
 }
 
+function Analytics() {
+  const [a, setA] = useState(null);
+  const [err, setErr] = useState("");
+  useEffect(() => {
+    api.admin.analytics().then(setA).catch((e) => setErr(errText(e)));
+  }, []);
+  if (err) return <p className="muted center">{err}</p>;
+  if (!a) return <p className="muted center">Загрузка…</p>;
+
+  const pct = (rate) => (rate === null || rate === undefined ? "—" : `${Math.round(rate * 100)}%`);
+  const max = Math.max(1, ...a.daily_active.map((d) => d.users));
+  return (
+    <>
+      <h2>За апошнія 7 дзён</h2>
+      <div className="stat-grid">
+        <Stat label="Адкрыццяў карткі" value={a.week.opens} />
+        <Stat label="Хто адкрываў" value={a.week.openers} />
+        <Stat label="Атрымалі рассылку" value={a.week.recipients} />
+        <Stat label="Адкрылі з атрымаўшых" value={pct(a.week.open_rate)} />
+      </div>
+      <h2>Утрыманне</h2>
+      <div className="stat-grid">
+        {["d1", "d7", "d30"].map((key) => (
+          <Stat key={key} label={`На ${key.slice(1)}-ы дзень (з ${a.retention[key].cohort})`} value={pct(a.retention[key].rate)} />
+        ))}
+      </div>
+      <h2>Актыўныя па днях</h2>
+      <div className="bars">
+        {a.daily_active.map((d) => (
+          <div key={d.day} className="bar-row">
+            <span className="muted">{d.day.slice(5)}</span>
+            <span className="bar-track">
+              <span className="bar" style={{ width: `${(d.users / max) * 100}%` }} />
+            </span>
+            <span>{d.users}</span>
+          </div>
+        ))}
+      </div>
+      <h2>Што захоўваюць</h2>
+      {a.top_saved.map((c) => (
+        <div key={c.card_id} className="row-item">
+          <b>{c.title}</b>{" "}
+          <span className="muted">
+            захавалі: {c.saves} · вывучылі: {c.learned}
+          </span>
+        </div>
+      ))}
+      {!a.top_saved.length && <p className="muted">Пакуль нічога не захоўвалі</p>}
+      <p className="muted">Дні лічацца па UTC.</p>
+    </>
+  );
+}
+
 function Stat({ label, value }) {
   return (
     <div className="stat">
@@ -75,9 +129,10 @@ function CardEditor({ initial, cardId, isAdmin, onDone }) {
       Object.keys(EMPTY_CARD).map((k) => [k, form[k] === "" && nullable.includes(k) ? null : form[k] ?? null])
     );
     try {
-      await api.admin.propose(cardId, payload);
-      setMsg(isAdmin ? "Адпраўлена ў чаргу: адабрыце яе ў «Чарзе»" : "Адпраўлена на праверку");
-      onDone?.();
+      const result = await api.admin.propose(cardId, payload);
+      // правка админа применяется сразу, правка редактора ждёт проверки в «Чарзе»;
+      // редактор закрывается, поэтому сообщение показывает список карточек
+      onDone?.(result?.status === "approved" ? "Захавана ✓" : "Адпраўлена на праверку");
     } catch (e) {
       setMsg(errText(e));
     }
@@ -124,7 +179,7 @@ function CardEditor({ initial, cardId, isAdmin, onDone }) {
         </select>
       </label>
       <button className="btn" onClick={submit}>
-        Адправіць на праверку
+        {isAdmin ? "Захаваць" : "Адправіць на праверку"}
       </button>
       {msg && <p className="ok">{msg}</p>}
     </div>
@@ -136,6 +191,7 @@ function Cards({ isAdmin }) {
   const [cards, setCards] = useState(null); // null — ещё грузится
   const [err, setErr] = useState("");
   const [editing, setEditing] = useState(null); // { card | null }
+  const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
 
   useEffect(() => {
@@ -170,8 +226,9 @@ function Cards({ isAdmin }) {
           initial={editing.card || {}}
           cardId={editing.card?.id ?? null}
           isAdmin={isAdmin}
-          onDone={() => {
+          onDone={(message) => {
             setEditing(null);
+            setNotice(message);
             setReload((n) => n + 1);
           }}
         />
@@ -183,10 +240,17 @@ function Cards({ isAdmin }) {
     <>
       <div className="row">
         <input className="search" placeholder="Пошук" value={q} onChange={(e) => setQ(e.target.value)} />
-        <button className="btn" onClick={() => setEditing({ card: null })}>
+        <button
+          className="btn"
+          onClick={() => {
+            setNotice("");
+            setEditing({ card: null });
+          }}
+        >
           + Новая
         </button>
       </div>
+      {notice && <p className="ok">{notice}</p>}
       {cards === null && <p className="muted center">Загрузка карткаў…</p>}
       {err && <p className="muted center">Не атрымалася загрузіць карткі: {err}</p>}
       {(cards || []).map((c) => (
@@ -369,6 +433,7 @@ export default function Admin({ me }) {
         ))}
       </div>
       {section === "stats" && <Stats />}
+      {section === "analytics" && <Analytics />}
       {section === "cards" && <Cards isAdmin={isAdmin} />}
       {section === "queue" && <Queue me={me} />}
       {section === "schedule" && isAdmin && <Schedule />}

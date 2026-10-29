@@ -65,15 +65,6 @@ async def test_deactivate_and_reactivate(client):
     assert r.json()["is_active"] is True
 
 
-async def test_web_login_creates_missing_user_then_forbids(client):
-    from tests.test_web_login import widget_data  # переиспользуем подпись виджета
-
-    r = await client.post("/api/web/login", json=widget_data(777, first_name="New"))
-    assert r.status_code == 403
-    async with SessionLocal() as s:
-        assert (await s.get(User, 777)).role == "user"
-
-
 async def test_sync_admin_roles_promotes_configured_ids(monkeypatch):
     monkeypatch.setattr(settings, "admin_ids", "555,abc")
     async with SessionLocal() as s:

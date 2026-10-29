@@ -2,7 +2,8 @@
 
 Роли: user (обычный), editor (предлагает правки), admin (одобряет, расписание, роли).
 Правки редакторов не применяются сразу: сначала pending, потом approve/reject админом.
-Автор не может одобрить собственную правку."""
+Правки админа применяются сразу (в истории — одобренные им же).
+Автор не может одобрить собственную правку из очереди."""
 from __future__ import annotations
 
 import json
@@ -16,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from .analytics import build_analytics
 from .auth import require_role
 from .cards import card_to_dict
 from .db import get_session, utcnow
@@ -127,6 +129,11 @@ async def stats(_: User = Depends(EDITOR), session: AsyncSession = Depends(get_s
     }
 
 
+@router.get("/analytics")
+async def analytics(_: User = Depends(EDITOR), session: AsyncSession = Depends(get_session)):
+    return await build_analytics(session, datetime.now(timezone.utc).date())
+
+
 @router.get("/cards")
 async def admin_cards(
     q: Optional[str] = None,
@@ -158,6 +165,26 @@ async def set_published(card_id: int, body: PublishIn, _: User = Depends(ADMIN),
     return card_admin_dict(card)
 
 
+async def apply_revision(session: AsyncSession, rev: CardRevision, reviewer: User) -> Card:
+    """Применяет правку к карточке (или создаёт новую) и помечает её одобренной."""
+    payload = json.loads(rev.payload)
+    if rev.card_id is None:
+        card = Card(**payload, slug=f"{payload['kind']}-{uuid.uuid4().hex[:8]}", published=True)
+        session.add(card)
+        await session.flush()
+        rev.card_id = card.id
+    else:
+        card = await session.get(Card, rev.card_id)
+        if card is None:
+            raise HTTPException(404, "card not found")
+        for key, value in payload.items():
+            setattr(card, key, value)
+    rev.status = "approved"
+    rev.reviewer_id = reviewer.id
+    rev.reviewed_at = utcnow()
+    return card
+
+
 @router.post("/revisions", status_code=201)
 async def propose_revision(body: RevisionIn, user: User = Depends(EDITOR), session: AsyncSession = Depends(get_session)):
     create = body.card_id is None
@@ -166,8 +193,13 @@ async def propose_revision(body: RevisionIn, user: User = Depends(EDITOR), sessi
         raise HTTPException(404, "card not found")
     rev = CardRevision(card_id=body.card_id, payload=json.dumps(payload, ensure_ascii=False), author_id=user.id)
     session.add(rev)
+    if user.role != "admin":
+        await session.commit()
+        return {"id": rev.id, "status": rev.status}
+    # правку админа применяем сразу; в истории она остаётся одобренной им же
+    card = await apply_revision(session, rev, reviewer=user)
     await session.commit()
-    return {"id": rev.id, "status": rev.status}
+    return {"id": rev.id, "status": rev.status, "card": card_admin_dict(card)}
 
 
 async def revision_dict(session: AsyncSession, rev: CardRevision) -> dict:
@@ -214,20 +246,7 @@ async def pending_revision(session: AsyncSession, rev_id: int, reviewer: User) -
 @router.post("/revisions/{rev_id}/approve")
 async def approve_revision(rev_id: int, user: User = Depends(ADMIN), session: AsyncSession = Depends(get_session)):
     rev = await pending_revision(session, rev_id, user)
-    payload = json.loads(rev.payload)
-    if rev.card_id is None:
-        card = Card(**payload, slug=f"{payload['kind']}-{uuid.uuid4().hex[:8]}", published=True)
-        session.add(card)
-        await session.flush()
-    else:
-        card = await session.get(Card, rev.card_id)
-        if card is None:
-            raise HTTPException(404, "card not found")
-        for key, value in payload.items():
-            setattr(card, key, value)
-    rev.status = "approved"
-    rev.reviewer_id = user.id
-    rev.reviewed_at = utcnow()
+    card = await apply_revision(session, rev, reviewer=user)
     await session.commit()
     return card_admin_dict(card)
 

@@ -99,3 +99,25 @@ class SavedCard(Base):
     card_id: Mapped[int] = mapped_column(Integer, ForeignKey("cards.id"), primary_key=True)
     status: Mapped[str] = mapped_column(String(16), default="saved")  # saved | learned
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class UsedLoginToken(Base):
+    """Одноразовые ссылки входа из бота: использованный nonce больше не пускает.
+    Хранится в базе, потому что на Vercel запросы попадают в разные экземпляры функции."""
+
+    __tablename__ = "used_login_tokens"
+
+    nonce: Mapped[str] = mapped_column(String(64), primary_key=True)
+    used_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+
+class Event(Base):
+    """События для аналитики: открытие карточки дня или карточки из списка, сохранение, «вывучана»."""
+
+    __tablename__ = "events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    kind: Mapped[str] = mapped_column(String(16), index=True)  # open_today | open_card | save | learn
+    card_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)

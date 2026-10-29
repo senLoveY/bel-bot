@@ -3,31 +3,33 @@ from __future__ import annotations
 import os
 import re
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import delete, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .admin import router as admin_router
+from .analytics import record_event
 from .auth import (
     SESSION_COOKIE,
     SESSION_TTL,
     current_user,
     make_session_token,
-    read_login_token,
-    validate_login_widget,
+    verify_login_token,
 )
 from .config import settings
 from .cards import card_for_date, card_to_dict
 from .clock import user_today
-from .db import get_session
-from .models import Card, SavedCard, User
+from .db import get_session, utcnow
+from .models import Card, SavedCard, UsedLoginToken, User
 from .streak import current_streak, touch_streak
 
 router = APIRouter(prefix="/api")
@@ -120,6 +122,8 @@ async def today(user: User = Depends(current_user), session: AsyncSession = Depe
     card = await card_for_date(session, user_today(user))
     if card is None:
         raise HTTPException(404, "no cards")
+    record_event(session, user.id, "open_today", card.id)
+    await session.commit()
     return card_to_dict(card, (await saved_map(session, user.id)).get(card.id))
 
 
@@ -148,6 +152,8 @@ async def get_card(card_id: int, user: User = Depends(current_user), session: As
     card = await session.get(Card, card_id)
     if card is None or not card.published:
         raise HTTPException(404, "card not found")
+    record_event(session, user.id, "open_card", card.id)
+    await session.commit()
     return card_to_dict(card, (await saved_map(session, user.id)).get(card.id))
 
 
@@ -162,6 +168,7 @@ async def save_card(card_id: int, body: SaveIn, user: User = Depends(current_use
         session.add(SavedCard(user_id=user.id, card_id=card_id, status=body.status))
     else:
         row.status = body.status
+    record_event(session, user.id, "learn" if body.status == "learned" else "save", card_id)
     await session.commit()
     return {"card_id": card_id, "status": body.status}
 
@@ -200,27 +207,20 @@ def set_session_cookie(response: Response, user_id: int) -> None:
     )
 
 
-@router.post("/web/login")
-async def web_login(response: Response, data: dict = Body(...), session: AsyncSession = Depends(get_session)):
-    """Вход на сайт через Telegram Login Widget: проверяем подпись и выдаём cookie-сессию."""
-    if not validate_login_widget(data, settings.bot_token):
-        raise HTTPException(401, "invalid login data")
-    user = await session.get(User, int(data["id"]))
-    if user is None:
-        user = User(id=int(data["id"]), first_name=data.get("first_name", ""), username=data.get("username"))
-        session.add(user)
-        await session.commit()
-    if user.role not in ("editor", "admin"):
-        raise HTTPException(403, "forbidden")
-    set_session_cookie(response, user.id)
-    return user_to_dict(user)
-
-
 @router.get("/web/tg-login")
 async def tg_login(token: str, session: AsyncSession = Depends(get_session)):
     """Ссылка из бота (/admin): одноразовый токен -> сессия -> переход в админку."""
-    user_id = read_login_token(token)
-    if user_id is None:
+    verified = verify_login_token(token)
+    if verified is None:
+        raise HTTPException(401, "link expired or already used")
+    user_id, nonce = verified
+    # одноразовость: nonce — первичный ключ, вторая вставка того же значения падает
+    await session.execute(delete(UsedLoginToken).where(UsedLoginToken.used_at < utcnow() - timedelta(days=1)))
+    session.add(UsedLoginToken(nonce=nonce))
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
         raise HTTPException(401, "link expired or already used")
     user = await session.get(User, user_id)
     if user is None or user.role not in ("editor", "admin"):
