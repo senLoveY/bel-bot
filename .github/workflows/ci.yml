@@ -1,9 +1,6 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
-#
-# Пуш в main: тесты -> деплой (деплой не стартует, если тесты упали).
-# Pull request: только тесты, без деплоя.
+# Тесты на каждый пуш и pull request. Деплой делает сам Vercel (интеграция с GitHub).
 
-name: Fly Deploy
+name: CI
 on:
   push:
     branches:
@@ -43,16 +40,3 @@ jobs:
         working-directory: webapp
       - run: npm run build
         working-directory: webapp
-
-  deploy:
-    name: Deploy app
-    needs: [test-backend, test-web]
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    concurrency: deploy-group    # один деплой за раз
-    steps:
-      - uses: actions/checkout@v4
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-      - run: flyctl deploy --remote-only
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

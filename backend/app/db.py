@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import os
+import uuid
 from datetime import datetime
 
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from .config import settings
 
@@ -14,7 +16,21 @@ class Base(DeclarativeBase):
     pass
 
 
-engine = create_async_engine(settings.database_url)
+def engine_kwargs(database_url: str, serverless: bool) -> dict:
+    kwargs: dict = {}
+    if serverless:
+        # каждый вызов функции живёт недолго: своё соединение без пула внутри приложения
+        kwargs["poolclass"] = NullPool
+    if database_url.startswith("postgresql+asyncpg"):
+        # пулер Supabase (pgbouncer) не поддерживает кэш подготовленных запросов asyncpg
+        kwargs["connect_args"] = {
+            "statement_cache_size": 0,
+            "prepared_statement_name_func": lambda: f"__asyncpg_{uuid.uuid4()}__",
+        }
+    return kwargs
+
+
+engine = create_async_engine(settings.database_url, **engine_kwargs(settings.database_url, settings.serverless))
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 

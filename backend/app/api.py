@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -21,27 +20,18 @@ from .auth import (
     current_user,
     make_session_token,
     read_login_token,
-    sync_admin_roles,
     validate_login_widget,
 )
 from .config import settings
-from .cards import card_for_date, card_to_dict, seed_cards
-from .db import SessionLocal, get_session, init_db
+from .cards import card_for_date, card_to_dict
+from .clock import user_today
+from .db import get_session
 from .models import Card, SavedCard, User
 from .streak import current_streak, touch_streak
 
 router = APIRouter(prefix="/api")
 
 TIME_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
-
-
-def user_today(user: User):
-    # у только что созданного пользователя tz ещё None: default применяется при записи в базу
-    try:
-        tz = ZoneInfo(user.tz or settings.default_tz)
-    except ZoneInfoNotFoundError:
-        tz = timezone.utc
-    return datetime.now(tz).date()
 
 
 async def saved_map(session: AsyncSession, user_id: int) -> dict:
@@ -231,17 +221,22 @@ async def web_logout(response: Response):
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    await init_db()
-    async with SessionLocal() as session:
-        await seed_cards(session)
-        await sync_admin_roles(session)
+    from .setup import setup_database
+
+    if not settings.serverless:  # на Vercel подготовка идёт лениво, см. setup.ensure_ready
+        await setup_database()
     yield
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Belarusian Daily", lifespan=lifespan)
+    from .setup import ensure_ready
+    from .webhook import router as webhook_router
+
+    # ensure_ready работает только в serverless: там подготовка базы идёт при первом запросе
+    app = FastAPI(title="Belarusian Daily", lifespan=lifespan, dependencies=[Depends(ensure_ready)])
     app.include_router(router)
     app.include_router(admin_router)
+    app.include_router(webhook_router)
 
     dist = Path(__file__).resolve().parents[2] / "webapp" / "dist"
     if dist.is_dir():

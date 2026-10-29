@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from typing import Optional
 
 from aiogram import Bot, Dispatcher, F, Router
 from aiogram.client.default import DefaultBotProperties
@@ -9,8 +10,8 @@ from aiogram.filters import Command
 from aiogram.types import CallbackQuery, Message
 from sqlalchemy.exc import IntegrityError
 
-from .api import user_today
 from .cards import card_for_date, format_card_message, seed_cards
+from .clock import user_today
 from .config import settings
 from .db import SessionLocal, init_db, utcnow
 from .delivery import run_scheduler
@@ -125,7 +126,26 @@ async def on_card_button(call: CallbackQuery) -> None:
     await call.answer("Захавана ⭐" if status == "saved" else "Малайчына! ✅")
 
 
+def make_bot() -> Bot:
+    """Новый клиент Bot API. В serverless создаём его на каждый вызов и закрываем после (async with)."""
+    return Bot(settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
+
+
+_dispatcher: Optional[Dispatcher] = None
+
+
+def get_dispatcher() -> Dispatcher:
+    """Один диспетчер на процесс: router можно подключить к диспетчеру только один раз."""
+    global _dispatcher
+    if _dispatcher is None:
+        _dispatcher = Dispatcher()
+        _dispatcher.include_router(router)
+    return _dispatcher
+
+
 async def main() -> None:
+    """Локальный режим: polling + встроенный планировщик. Перед запуском снимите webhook
+    (python -m app.manage delete-webhook), иначе Telegram не отдаст обновления через polling."""
     logging.basicConfig(level=logging.INFO)
     if not settings.bot_token:
         raise SystemExit("BOT_TOKEN is not set")
@@ -133,12 +153,10 @@ async def main() -> None:
     async with SessionLocal() as session:
         await seed_cards(session)
 
-    bot = Bot(settings.bot_token, default=DefaultBotProperties(parse_mode="HTML"))
-    dp = Dispatcher()
-    dp.include_router(router)
+    bot = make_bot()
     scheduler = asyncio.create_task(run_scheduler(bot))
     try:
-        await dp.start_polling(bot)
+        await get_dispatcher().start_polling(bot)
     finally:
         scheduler.cancel()
 

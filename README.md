@@ -27,9 +27,28 @@ Mini App требует HTTPS: поднимите туннель (`cloudflared t
 docker compose up --build
 ```
 
+## Продакшен на Vercel
+
+Mini App и сайт админки — статика из `webapp/dist`, API — serverless-функция `api/index.py`
+(FastAPI из `backend/app`). Бот работает через webhook, рассылку запускает внешний крон.
+
+1. **Vercel → Add New Project →** импорт репозитория, корень проекта — корень репозитория
+   (настройки сборки берутся из `vercel.json`).
+2. **Environment Variables:**
+   `BOT_TOKEN`, `DATABASE_URL` (Supabase Session pooler, префикс `postgresql+asyncpg://`),
+   `WEBAPP_URL` (адрес проекта, например `https://zyarnyatka.vercel.app`), `ADMIN_IDS`,
+   `SERVERLESS=true`, `WEBHOOK_SECRET`, `CRON_SECRET`.
+3. После деплоя направить Telegram на webhook (из `backend/`, с теми же `WEBAPP_URL` и `WEBHOOK_SECRET`):
+   `python -m app.manage set-webhook`, проверка — `python -m app.manage webhook-info`.
+4. **Крон:** раз в 5 минут `POST {WEBAPP_URL}/api/cron/tick` с заголовком
+   `Authorization: Bearer <CRON_SECRET>` (например, cron-job.org). Вручную — workflow «Broadcast tick».
+
+Локальный бот работает через polling: перед запуском `python -m app.manage delete-webhook`,
+после — снова `set-webhook`, иначе продакшен-бот перестанет получать сообщения.
+
 ## Как работает рассылка
 
-1. Каждые 30 с планировщик находит пользователей, у которых наступило локальное время отправки
+1. Каждые 30 с (локально) или при каждом вызове крона (Vercel) планировщик находит пользователей, у которых наступило локальное время отправки
    (окно догонки — 6 ч), и создаёт запись `deliveries` (уникальна на пользователя и день).
 2. Воркер берёт `pending`-записи и отправляет с общим лимитом 25 сообщений/с.
 3. `429` — пауза на `retry_after` для всех отправок; `403` — пользователь помечается неактивным;

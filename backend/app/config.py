@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     # Telegram ID через запятую: при старте им выдаётся роль admin
     admin_ids: str = ""
 
+    # serverless (Vercel): бот через webhook, рассылка по внешнему крону
+    serverless: bool = False  # без пула соединений, подготовка базы при первом запросе
+    webhook_secret: str = ""  # Telegram присылает его в X-Telegram-Bot-Api-Secret-Token
+    cron_secret: str = ""  # крон передаёт его в Authorization: Bearer ...
+    cron_batch: int = 100  # сколько сообщений отправлять за один вызов крона
+
     @property
     def admin_id_set(self) -> set[int]:
         return {int(x) for x in self.admin_ids.split(",") if x.strip().isdigit()}

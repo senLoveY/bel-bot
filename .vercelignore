@@ -1,0 +1,8 @@
+backend/.venv
+backend/data
+backend/tests
+backend/.coverage
+webapp/node_modules
+webapp/dist
+.env
+.claude
