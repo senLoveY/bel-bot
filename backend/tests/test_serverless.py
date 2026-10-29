@@ -24,6 +24,9 @@ UPDATE = {
 }
 
 
+FAKE_REQUEST = MagicMock(url=MagicMock(path="/api/today"))
+
+
 class FakeBot:
     """Заменяет aiogram.Bot: поддерживает async with и записывает вызовы API."""
 
@@ -108,12 +111,12 @@ async def test_ensure_ready_runs_setup_once_in_serverless(monkeypatch):
     monkeypatch.setattr(setup, "_ready", False)
 
     monkeypatch.setattr(settings, "serverless", False)
-    await setup.ensure_ready()
+    await setup.ensure_ready(FAKE_REQUEST)
     assert calls.await_count == 0  # обычный сервер готовит базу при старте
 
     monkeypatch.setattr(settings, "serverless", True)
-    await setup.ensure_ready()
-    await setup.ensure_ready()
+    await setup.ensure_ready(FAKE_REQUEST)
+    await setup.ensure_ready(FAKE_REQUEST)
     assert calls.await_count == 1
 
 
@@ -214,3 +217,17 @@ async def test_setup_failure_returns_503_with_error_type_only(client, monkeypatc
     assert r.json()["detail"] == "database setup failed: ConnectionError"
     assert "secret" not in r.text  # строка подключения не утекает в ответ
     assert "database setup failed" in caplog.text
+
+
+async def test_health_reports_config_without_secrets(client, monkeypatch):
+    monkeypatch.setattr(settings, "serverless", True)
+    monkeypatch.setattr(setup, "_ready", False)
+    monkeypatch.setattr(setup, "setup_database", AsyncMock(side_effect=RuntimeError("db down")))
+    monkeypatch.setenv("BOT_TOKEN", "123456:SECRET")
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    r = await client.get("/api/health")  # работает, даже если база не готова
+    body = r.json()
+    assert r.status_code == 200
+    assert body["env_set"]["BOT_TOKEN"] is True and body["env_set"]["DATABASE_URL"] is False
+    assert body["database_driver"].startswith("sqlite")
+    assert "123456" not in r.text  # значение токена не попадает в ответ

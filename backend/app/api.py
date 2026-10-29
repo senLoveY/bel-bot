@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -62,6 +63,20 @@ def user_to_dict(user: User) -> dict:
         "streak": current_streak(user, user_today(user)),
         "longest_streak": user.longest_streak or 0,
         "role": user.role or "user",
+    }
+
+
+HEALTH_VARS = ("BOT_TOKEN", "DATABASE_URL", "WEBAPP_URL", "ADMIN_IDS", "WEBHOOK_SECRET", "CRON_SECRET")
+
+
+@router.get("/health")
+async def health():
+    """Диагностика без секретов: какие переменные заданы (да/нет) и какой драйвер базы выбран."""
+    return {
+        "serverless": settings.serverless,
+        "vercel_env": os.environ.get("VERCEL_ENV"),
+        "database_driver": settings.database_url.split("://", 1)[0],
+        "env_set": {name: bool(os.environ.get(name)) for name in HEALTH_VARS},
     }
 
 

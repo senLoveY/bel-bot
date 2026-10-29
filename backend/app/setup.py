@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 
 from .auth import sync_admin_roles
 from .cards import seed_cards
@@ -27,9 +27,9 @@ async def setup_database() -> None:
         await sync_admin_roles(session)
 
 
-async def ensure_ready() -> None:
+async def ensure_ready(request: Request) -> None:
     global _ready
-    if _ready or not settings.serverless:
+    if _ready or not settings.serverless or request.url.path == "/api/health":
         return
     try:
         await setup_database()
